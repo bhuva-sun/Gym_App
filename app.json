@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TheGymEye",
-    "slug": "TheGymEye",
+    "slug": "gymapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -20,10 +20,17 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.thadityasorganization.gymapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7d6ffd45-eee6-48cd-9ba7-c6f58ea06198"
+      }
+    },
+    "owner": "thadityas-organization"
   }
 }
