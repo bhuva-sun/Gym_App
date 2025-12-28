@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { Member, Notification } from '../types';
 import firebaseService from './firebaseService';
@@ -15,13 +16,20 @@ Notifications.setNotificationHandler({
 
 class NotificationService {
   private expoPushToken: string | null = null;
-  private isExpoGo: boolean = true; // Assume Expo Go by default
+  // Assume non-Expo Go by default; we'll detect actual environment at runtime
+  private isExpoGo: boolean = false;
 
-  // Check if running in Expo Go
+  // Check if running in Expo Go using app ownership
   private checkExpoGoEnvironment() {
-    // In Expo Go, we can't get push tokens, so we'll use local notifications only
-    this.isExpoGo = true;
-    console.log('Running in Expo Go - using local notifications only');
+    try {
+      const ownership = Constants.appOwnership; // 'expo' in Expo Go, 'standalone' or 'guest' in dev/prod builds
+      this.isExpoGo = ownership === 'expo';
+      console.log(`Notification environment: appOwnership=${ownership}, isExpoGo=${this.isExpoGo}`);
+    } catch (error) {
+      // If we can't determine, assume non-Expo Go so dev/production builds can get push tokens
+      console.log('Could not determine app ownership, assuming non-Expo Go for notifications:', error);
+      this.isExpoGo = false;
+    }
   }
 
   // Request notification permissions (Expo Go compatible)
