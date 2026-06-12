@@ -4,18 +4,18 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import firebaseService from '../services/firebaseService';
 import { DietChart } from '../types';
+import { COLORS, GRADIENTS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
 
 const DietChartScreen = () => {
-  const navigation = useNavigation();
   const { user } = useAuth();
   const [dietChart, setDietChart] = useState<DietChart | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,8 +26,7 @@ const DietChartScreen = () => {
   }, []);
 
   const loadDietChart = async () => {
-    if (!user?.memberId) return;
-
+    if (!user?.memberId) { setIsLoading(false); return; }
     try {
       const chart = await firebaseService.getDietChartByMember(user.memberId);
       setDietChart(chart);
@@ -44,131 +43,73 @@ const DietChartScreen = () => {
     setRefreshing(false);
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading diet chart...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      {/* Enhanced Header */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
+      <LinearGradient colors={GRADIENTS.diet} style={styles.headerGradient}>
+        <View style={styles.headerRow}>
           <Text style={styles.headerTitle}>Diet Chart</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={onRefresh}
-          >
-            <Ionicons name="refresh" size={24} color="white" />
-          </TouchableOpacity>
+          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]} onPress={onRefresh}>
+            <Ionicons name="refresh" size={20} color={COLORS.textWhite} />
+          </Pressable>
         </View>
-        
-        {dietChart && (
-          <View style={styles.headerStats}>
-            <View style={styles.headerStatItem}>
-              <Ionicons name="restaurant" size={16} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.headerStatLabel}>Goal</Text>
-              <Text style={styles.headerStatValue}>
-                {dietChart.goal.replace('_', ' ').toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.headerStatItem}>
-              <Ionicons name="flame" size={16} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.headerStatLabel}>Calories</Text>
-              <Text style={styles.headerStatValue}>{dietChart.targetCalories}</Text>
-            </View>
-            <View style={styles.headerStatItem}>
-              <Ionicons name="time" size={16} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.headerStatLabel}>Meals</Text>
-              <Text style={styles.headerStatValue}>{dietChart.meals.length}</Text>
-            </View>
-          </View>
-        )}
+        <Text style={styles.headerSubtitle}>Your personalized nutrition plan</Text>
       </LinearGradient>
 
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
+      <ScrollView
+        style={[styles.scrollView, Platform.OS === 'web' && { overflow: 'auto' as any }]}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        showsVerticalScrollIndicator={Platform.OS !== 'web'}
       >
         {dietChart ? (
-          <>
-            {/* Diet Overview */}
-            <View style={styles.dietOverview}>
-              <Text style={styles.dietTitle}>{dietChart.name}</Text>
-              <Text style={styles.dietDescription}>{dietChart.description}</Text>
+          <View style={styles.chartContainer}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartName}>{dietChart.name}</Text>
+              <View style={[styles.goalBadge, { backgroundColor: COLORS.success + '15' }]}>
+                <Text style={[styles.goalText, { color: COLORS.success }]}>
+                  {dietChart.goal.replace('_', ' ').toUpperCase()}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.chartDesc}>{dietChart.description}</Text>
+            <View style={styles.calorieCard}>
+              <Ionicons name="flame" size={24} color={COLORS.warning} />
+              <Text style={styles.calorieValue}>{dietChart.targetCalories}</Text>
+              <Text style={styles.calorieLabel}>Daily Calories</Text>
             </View>
 
-            {/* Daily Meals */}
-            <View style={styles.mealsContainer}>
-              <Text style={styles.sectionTitle}>Daily Meal Plan</Text>
-              
-              {dietChart.meals.map((meal, index) => (
-                <View key={meal.id} style={styles.mealCard}>
-                  <View style={styles.mealHeader}>
-                    <View style={styles.mealIcon}>
-                      <Ionicons name="restaurant" size={24} color="#667eea" />
-                    </View>
-                    <View style={styles.mealInfo}>
-                      <Text style={styles.mealName}>{meal.name}</Text>
-                      <Text style={styles.mealTime}>{meal.time}</Text>
-                    </View>
-                    <View style={styles.mealCalories}>
-                      <Text style={styles.caloriesText}>{meal.totalCalories} cal</Text>
-                    </View>
-                  </View>
-
-                  {meal.foods && meal.foods.length > 0 && (
-                    <View style={styles.foodsList}>
-                      {meal.foods.map((food) => (
-                        <View key={food.id} style={styles.foodItem}>
-                          <View style={styles.foodInfo}>
-                            <Text style={styles.foodName}>{food.name}</Text>
-                            <Text style={styles.foodQuantity}>
-                              {food.quantity} {food.unit}
-                            </Text>
-                          </View>
-                          <View style={styles.foodNutrition}>
-                            <Text style={styles.nutritionText}>{food.calories} cal</Text>
-                            <Text style={styles.nutritionText}>
-                              P: {food.protein}g | C: {food.carbs}g | F: {food.fat}g
-                            </Text>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {meal.notes && (
-                    <View style={styles.mealNotes}>
-                      <Text style={styles.notesText}>{meal.notes}</Text>
-                    </View>
-                  )}
+            {dietChart.meals.map((meal) => (
+              <View key={meal.id} style={styles.mealCard}>
+                <View style={styles.mealHeader}>
+                  <Ionicons name="restaurant" size={18} color={COLORS.primary} />
+                  <Text style={styles.mealName}>{meal.name}</Text>
+                  <Text style={styles.mealTime}>{meal.time}</Text>
                 </View>
-              ))}
-            </View>
-          </>
+                {meal.foods.map((food) => (
+                  <View key={food.id} style={styles.foodRow}>
+                    <Text style={styles.foodName}>{food.name}</Text>
+                    <Text style={styles.foodMacro}>{food.calories} cal</Text>
+                  </View>
+                ))}
+                <View style={styles.mealTotal}>
+                  <Text style={styles.mealTotalText}>Total: {meal.totalCalories} cal</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="restaurant-outline" size={80} color="#ccc" />
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="restaurant-outline" size={64} color={COLORS.success} />
+            </View>
             <Text style={styles.emptyTitle}>No Diet Chart Assigned</Text>
             <Text style={styles.emptySubtitle}>
-              Your trainer will assign you a personalized diet chart based on your goals and nutritional needs.
+              Your trainer will create a personalized diet plan based on your goals and nutritional needs.
             </Text>
+            <Pressable style={({ pressed }) => [styles.contactBtn, pressed && styles.contactPressed]}>
+              <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
+              <Text style={styles.contactBtnText}>Contact Trainer</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -177,216 +118,66 @@ const DietChartScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  container: { flex: 1, backgroundColor: COLORS.background },
+  headerGradient: {
+    paddingTop: Platform.OS === 'web' ? 20 : 50, paddingBottom: 20, paddingHorizontal: 20,
+    borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  headerTitle: { ...TYPOGRAPHY.h2, color: COLORS.textWhite },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+  headerSubtitle: { ...TYPOGRAPHY.bodySmall, color: 'rgba(255,255,255,0.8)' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  chartContainer: {},
+  chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  chartName: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
+  goalBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: RADIUS.full },
+  goalText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
+  chartDesc: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, marginBottom: 16 },
+  calorieCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 20,
+    alignItems: 'center', ...SHADOWS.small, marginBottom: 16, gap: 6,
   },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    flex: 1,
-    textAlign: 'center',
-  },
-  refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 15,
-  },
-  headerStatItem: {
-    alignItems: 'center',
-  },
-  headerStatLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-  },
-  headerStatValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'white',
-    marginTop: 2,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  dietOverview: {
-    backgroundColor: 'white',
-    margin: 20,
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dietTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  dietDescription: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-  },
-  mealsContainer: {
-    marginHorizontal: 20,
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
+  calorieValue: { ...TYPOGRAPHY.h1, color: COLORS.textPrimary },
+  calorieLabel: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary },
   mealCard: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16,
+    ...SHADOWS.small, marginBottom: 12,
   },
-  mealHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
+  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  mealName: { ...TYPOGRAPHY.label, color: COLORS.textPrimary, flex: 1 },
+  mealTime: { ...TYPOGRAPHY.caption, color: COLORS.textTertiary },
+  foodRow: {
+    flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6,
+    borderBottomWidth: 1, borderBottomColor: COLORS.divider,
   },
-  mealIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f8ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
+  foodName: { ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary },
+  foodMacro: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary },
+  mealTotal: { paddingTop: 8, alignItems: 'flex-end' },
+  mealTotalText: { ...TYPOGRAPHY.label, color: COLORS.primary },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconContainer: {
+    width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.success + '15',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
   },
-  mealInfo: {
-    flex: 1,
-  },
-  mealName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  mealTime: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  mealCalories: {
-    alignItems: 'flex-end',
-  },
-  caloriesText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#F44336',
-  },
-  foodsList: {
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 15,
-  },
-  foodItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8f8f8',
-  },
-  foodInfo: {
-    flex: 1,
-  },
-  foodName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  foodQuantity: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  foodNutrition: {
-    alignItems: 'flex-end',
-  },
-  nutritionText: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
-  },
-  mealNotes: {
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 15,
-    marginTop: 15,
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    marginTop: 100,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-    marginBottom: 10,
-  },
+  emptyTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: 8 },
   emptySubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
+    ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center',
+    marginBottom: 24, lineHeight: 22,
   },
+  contactBtn: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary,
+    paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.full, gap: 8,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
+  },
+  contactPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  contactBtnText: { ...TYPOGRAPHY.button, color: COLORS.textWhite },
+  pressed: { opacity: 0.7 },
 });
 
-export default DietChartScreen; 
+export default DietChartScreen;

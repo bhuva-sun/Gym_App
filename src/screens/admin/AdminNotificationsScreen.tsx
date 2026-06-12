@@ -19,9 +19,12 @@ import firebaseService from '../../services/firebaseService';
 import notificationService from '../../services/notificationService';
 import { Notification, Member } from '../../types';
 import RefreshHeader from '../../components/RefreshHeader';
+import { AuthContext } from '../../context/AuthContext';
 
 const AdminNotificationsScreen = () => {
   const navigation = useNavigation();
+  const authContext = React.useContext(AuthContext);
+  const clan = authContext?.clan;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [membersNeedingRenewal, setMembersNeedingRenewal] = useState<Member[]>([]);
   const [allMembers, setAllMembers] = useState<Member[]>([]);
@@ -41,14 +44,15 @@ const AdminNotificationsScreen = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [clan]);
 
   const loadData = async () => {
     try {
+      const clanId = clan?.id || '';
       const [allNotifications, membersNeedingRenewal, allMembersData] = await Promise.all([
-        firebaseService.getAllNotifications(),
-        firebaseService.getMembersNeedingRenewal(30),
-        firebaseService.getAllMembers(),
+        firebaseService.getAllNotifications(clanId),
+        firebaseService.getMembersNeedingRenewal(30, clanId),
+        firebaseService.getMembersByClan(clanId),
       ]);
       
       setNotifications(allNotifications);
@@ -101,6 +105,7 @@ const AdminNotificationsScreen = () => {
       for (const member of selectedMembersList) {
         const notification: Omit<Notification, 'id'> = {
           userId: member.id,
+          clanId: member.clanId,
           title: customTitle.trim(),
           message: customMessage.trim(),
           type: notificationType,
@@ -115,7 +120,7 @@ const AdminNotificationsScreen = () => {
             await notificationService.scheduleLocalNotification(
               customTitle.trim(),
               customMessage.trim(),
-              { seconds: 2 }
+              null
             );
           } catch (error) {
             console.log('Local notification failed for member:', member.name);
@@ -287,12 +292,12 @@ const AdminNotificationsScreen = () => {
             <View style={styles.membersList}>
               <Text style={styles.membersListTitle}>Members needing renewal:</Text>
               {membersNeedingRenewal.slice(0, 5).map((member) => (
-                <Text key={member.id} style={styles.memberItem}>
+                <Text key={member.id} style={styles.memberTextItem}>
                   • {member.name} - Expires: {new Date(member.membershipEndDate).toLocaleDateString()}
                 </Text>
               ))}
               {membersNeedingRenewal.length > 5 && (
-                <Text style={styles.memberItem}>... and {membersNeedingRenewal.length - 5} more</Text>
+                <Text style={styles.memberTextItem}>... and {membersNeedingRenewal.length - 5} more</Text>
               )}
             </View>
           </View>
@@ -834,7 +839,7 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     marginBottom: 8,
   },
-  memberItem: {
+  memberTextItem: {
     fontSize: 13,
     color: '#8E8E93',
     marginBottom: 4,

@@ -214,6 +214,7 @@ class DatabaseService {
     if (members.length === 0) {
       const sampleMember: Member = {
         id: '1',
+        clanId: 'default-clan',
         name: 'John Doe',
         gender: 'male',
         height: 175,

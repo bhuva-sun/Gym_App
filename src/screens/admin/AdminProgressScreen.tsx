@@ -15,12 +15,12 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import firebaseService from '../../services/firebaseService';
 import { ProgressLog, Member } from '../../types';
-import { RootStackParamList } from '../../types/navigation';
+import { RootStackParamList, AdminTabParamList } from '../../types/navigation';
 
-type AdminNavigationProp = StackNavigationProp<RootStackParamList>;
+type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabParamList>;
 
 const AdminProgressScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<AdminNavigationProp>();
   const [progressLogs, setProgressLogs] = useState<ProgressLog[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [refreshing, setRefreshing] = useState(false);

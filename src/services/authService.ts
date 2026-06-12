@@ -1,14 +1,19 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail
 } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { auth, googleProvider } from '../config/firebase';
 import { createAuthUser, getAuthUserByEmail } from './firebaseService';
 import { AuthUser } from '../types';
+
+// Admin email constant
+export const ADMIN_EMAIL = 'bhvanmadhur@gmail.com';
 
 // Sign up with email and password
 export const signUp = async (
@@ -30,7 +35,8 @@ export const signUp = async (
     await createAuthUser({
       email: email,
       memberId: memberData.id,
-      role: 'member',
+      clanId: memberData.clanId || '',
+      role: email === ADMIN_EMAIL ? 'owner' : 'member',
       isActive: true,
       createdAt: new Date().toISOString()
     });
@@ -49,6 +55,33 @@ export const signIn = async (email: string, password: string): Promise<FirebaseU
     return userCredential.user;
   } catch (error: any) {
     console.error('Error signing in:', error);
+    throw new Error(error.message);
+  }
+};
+
+// Sign in with Google
+export const signInWithGoogle = async (): Promise<{ user: FirebaseUser; isNewUser: boolean }> => {
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const user = result.user;
+
+    // Check if auth user record exists
+    const existingAuthUser = await getAuthUserByEmail(user.email!);
+    const isNewUser = !existingAuthUser;
+
+    if (isNewUser) {
+      // Create a basic auth user record — clan join will happen later
+      await createAuthUser({
+        email: user.email!,
+        role: user.email === ADMIN_EMAIL ? 'owner' : 'member',
+        isActive: true,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    return { user, isNewUser };
+  } catch (error: any) {
+    console.error('Error signing in with Google:', error);
     throw new Error(error.message);
   }
 };
@@ -81,4 +114,15 @@ export const getAuthUserData = async (email: string): Promise<AuthUser | null> =
     console.error('Error getting auth user data:', error);
     return null;
   }
-}; 
+};
+
+// Reset password via email
+export const resetPassword = async (email: string): Promise<void> => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    console.log(`Password reset email sent to ${email}`);
+  } catch (error: any) {
+    console.error('Error sending password reset email:', error);
+    throw new Error(error.message);
+  }
+};

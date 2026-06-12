@@ -3,22 +3,26 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { COLORS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const { login, loginWithGoogle } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -37,38 +41,70 @@ const LoginScreen = ({ navigation }: any) => {
         errorMessage = 'Invalid password';
       } else if (error.message.includes('invalid-email')) {
         errorMessage = 'Invalid email format';
+      } else if (error.message.includes('invalid-credential')) {
+        errorMessage = 'Invalid email or password';
       } else if (error.message.includes('too-many-requests')) {
         errorMessage = 'Too many failed attempts. Please try again later';
       }
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Login Failed', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const { isNewUser } = await loginWithGoogle();
+      if (isNewUser) {
+        // New Google user — they'll need to join or create a clan
+        // The navigator will handle routing to JoinClan screen
+      }
+    } catch (error: any) {
+      let errorMessage = 'Google sign-in failed';
+      if (error.message.includes('popup-closed-by-user')) {
+        errorMessage = 'Sign-in was cancelled';
+      } else if (error.message.includes('network-request-failed')) {
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   return (
     <LinearGradient
-      colors={['#667eea', '#764ba2']}
+      colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
       style={styles.container}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          style={Platform.OS === 'web' ? { overflow: 'auto' as any } : undefined}
+        >
+          {/* Logo & Title */}
           <View style={styles.header}>
-            <Ionicons name="fitness" size={80} color="white" />
-            <Text style={styles.title}>GymApp</Text>
+            <View style={styles.logoContainer}>
+              <Ionicons name="fitness" size={48} color={COLORS.primary} />
+            </View>
+            <Text style={styles.title}>TheGymEye</Text>
             <Text style={styles.subtitle}>Your Fitness Journey Starts Here</Text>
           </View>
 
+          {/* Form Card */}
           <View style={styles.formContainer}>
+            {/* Email Input */}
             <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="mail-outline" size={20} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#666"
+                placeholder="Email address"
+                placeholderTextColor={COLORS.textTertiary}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -77,48 +113,95 @@ const LoginScreen = ({ navigation }: any) => {
               />
             </View>
 
+            {/* Password Input */}
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={20} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Password"
-                placeholderTextColor="#666"
+                placeholderTextColor={COLORS.textTertiary}
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              <Pressable
+                onPress={() => setShowPassword(!showPassword)}
+                style={({ pressed }) => [styles.eyeButton, pressed && styles.pressed]}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={COLORS.textTertiary}
+                />
+              </Pressable>
             </View>
 
-            <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+            {/* Login Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.loginButton,
+                isLoading && styles.buttonDisabled,
+                pressed && !isLoading && styles.buttonPressed,
+              ]}
               onPress={handleLogin}
               disabled={isLoading}
             >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'Logging in...' : 'Login'}
-              </Text>
-            </TouchableOpacity>
+              {isLoading ? (
+                <ActivityIndicator color={COLORS.textWhite} size="small" />
+              ) : (
+                <Text style={styles.loginButtonText}>Sign In</Text>
+              )}
+            </Pressable>
 
+            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
+              <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            <TouchableOpacity
-              style={styles.registerButton}
-              onPress={() => navigation.navigate('Register')}
+            {/* Google Sign-In Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleButton,
+                isGoogleLoading && styles.buttonDisabled,
+                pressed && !isGoogleLoading && styles.googleButtonPressed,
+              ]}
+              onPress={handleGoogleLogin}
+              disabled={isGoogleLoading}
             >
-              <Text style={styles.registerButtonText}>Create New Account</Text>
-            </TouchableOpacity>
+              {isGoogleLoading ? (
+                <ActivityIndicator color={COLORS.textPrimary} size="small" />
+              ) : (
+                <>
+                  <View style={styles.googleIconContainer}>
+                    <Text style={styles.googleIconG}>G</Text>
+                  </View>
+                  <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                </>
+              )}
+            </Pressable>
 
-            <View style={styles.demoContainer}>
-              <Text style={styles.demoText}>Demo Account:</Text>
-              <Text style={styles.demoCredentials}>Email: john@example.com</Text>
-              <Text style={styles.demoCredentials}>Password: password123</Text>
+            {/* Register Link */}
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>Don't have an account? </Text>
+              <Pressable
+                onPress={() => navigation.navigate('Register')}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={styles.registerLink}>Sign Up</Text>
+              </Pressable>
             </View>
+          </View>
+
+          {/* Demo Info */}
+          <View style={styles.demoContainer}>
+            <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.7)" />
+            <Text style={styles.demoText}>
+              Demo: john@example.com / password123
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -136,118 +219,162 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: 36,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: COLORS.textWhite,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...SHADOWS.large,
+    marginBottom: 16,
   },
   title: {
+    ...TYPOGRAPHY.h1,
+    color: COLORS.textWhite,
     fontSize: 32,
-    fontWeight: 'bold',
-    color: 'white',
-    marginTop: 10,
+    letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 16,
+    ...TYPOGRAPHY.bodySmall,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
-    textAlign: 'center',
+    marginTop: 6,
   },
   formContainer: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 30,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    padding: 28,
+    ...SHADOWS.large,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    marginBottom: 20,
-    paddingHorizontal: 15,
-    backgroundColor: '#f8f9fa',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.md,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    backgroundColor: COLORS.surfaceSecondary,
+    height: 52,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   input: {
     flex: 1,
-    height: 50,
-    fontSize: 16,
-    color: '#333',
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    height: '100%',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+  },
+  eyeButton: {
+    padding: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
   loginButton: {
-    backgroundColor: '#667eea',
-    borderRadius: 12,
-    height: 50,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  loginButtonDisabled: {
-    backgroundColor: '#ccc',
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   loginButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    ...TYPOGRAPHY.button,
+    color: COLORS.textWhite,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#ddd',
+    backgroundColor: COLORS.borderLight,
   },
   dividerText: {
-    marginHorizontal: 15,
-    color: '#666',
-    fontSize: 14,
+    marginHorizontal: 16,
+    color: COLORS.textTertiary,
+    ...TYPOGRAPHY.caption,
   },
-  registerButton: {
-    borderWidth: 2,
-    borderColor: '#667eea',
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    height: 52,
+    backgroundColor: COLORS.surface,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
+  },
+  googleButtonPressed: {
+    backgroundColor: COLORS.surfaceSecondary,
+    transform: [{ scale: 0.98 }],
+  },
+  googleIconContainer: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    height: 50,
+    backgroundColor: COLORS.googleBlue,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginRight: 12,
   },
-  registerButtonText: {
-    color: '#667eea',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  demoContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 10,
-  },
-  demoText: {
+  googleIconG: {
+    color: COLORS.textWhite,
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#666',
-    marginBottom: 5,
   },
-  demoCredentials: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 2,
+  googleButtonText: {
+    ...TYPOGRAPHY.button,
+    color: COLORS.textPrimary,
+    fontSize: 15,
+  },
+  registerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  registerText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
+  },
+  registerLink: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.7,
+  },
+  demoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 6,
+  },
+  demoText: {
+    ...TYPOGRAPHY.caption,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 });
 
-export default LoginScreen; 
+export default LoginScreen;

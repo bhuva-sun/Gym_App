@@ -1,3 +1,17 @@
+// ========== Clan System ==========
+export interface Clan {
+  id: string;
+  name: string;
+  ownerId: string;       // Firebase Auth UID of the owner
+  ownerEmail: string;
+  inviteCode: string;    // 6-char alphanumeric code
+  description?: string;
+  logoUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ========== Member ==========
 export interface Member {
   id: string;
   name: string;
@@ -7,6 +21,7 @@ export interface Member {
   email: string;
   phone: string;
   address: string;
+  clanId: string;
   membershipStatus: 'active' | 'expired' | 'pending';
   membershipFee: number;
   membershipFeeStatus: 'paid' | 'pending' | 'overdue';
@@ -24,12 +39,15 @@ export interface Member {
   profileImage?: string;
 }
 
+// ========== Workout ==========
 export interface Workout {
   id: string;
   memberId: string;
+  clanId: string;
   date: Date;
   duration: number; // in minutes
   type: 'cardio' | 'strength' | 'flexibility' | 'mixed';
+  name?: string;
   exercises: Exercise[];
   notes: string;
   caloriesBurned?: number;
@@ -49,9 +67,11 @@ export interface Exercise {
   notes?: string;
 }
 
+// ========== Fitness Plan ==========
 export interface FitnessPlan {
   id: string;
   memberId: string;
+  clanId: string;
   name: string;
   description: string;
   goal: 'weight_loss' | 'muscle_gain' | 'endurance' | 'flexibility' | 'general_fitness';
@@ -85,9 +105,11 @@ export interface ExerciseTemplate {
   instructions?: string;
 }
 
+// ========== Diet Chart ==========
 export interface DietChart {
   id: string;
   memberId: string;
+  clanId: string;
   name: string;
   description: string;
   goal: 'weight_loss' | 'muscle_gain' | 'maintenance' | 'health';
@@ -122,9 +144,11 @@ export interface FoodItem {
   fat: number;
 }
 
+// ========== Progress Log ==========
 export interface ProgressLog {
   id: string;
   memberId: string;
+  clanId: string;
   date: Date;
   weight: number;
   bodyFat?: number;
@@ -145,6 +169,7 @@ export interface BodyMeasurements {
   neck: number;
 }
 
+// ========== Trainer ==========
 export interface Trainer {
   id: string;
   name: string;
@@ -153,33 +178,40 @@ export interface Trainer {
   specialization: string[];
   bio: string;
   profileImage?: string;
+  clanId: string;
   createdAt: string;
 }
 
+// ========== Auth User ==========
 export interface AuthUser {
   id: string;
   email: string;
-  role: 'member' | 'trainer' | 'admin';
+  role: 'member' | 'trainer' | 'admin' | 'owner';
   memberId?: string;
   trainerId?: string;
+  clanId?: string;
   isActive: boolean;
   createdAt: string;
 }
 
+// ========== Admin ==========
 export interface Admin {
   id: string;
   email: string;
   name: string;
-  role: 'admin';
+  role: 'admin' | 'owner';
   permissions: string[];
+  clanId: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+// ========== Notification ==========
 export interface Notification {
   id: string;
   userId: string;
+  clanId: string;
   title: string;
   message: string;
   type: 'info' | 'warning' | 'success' | 'error' | 'membership_renewal';
@@ -204,4 +236,4 @@ export interface MembershipRenewalNotification {
   notificationSent: boolean;
   lastNotificationDate?: string;
   createdAt: string;
-} 
+}

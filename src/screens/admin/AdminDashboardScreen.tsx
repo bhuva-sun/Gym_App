@@ -15,10 +15,10 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import firebaseService from '../../services/firebaseService';
 import { Member, Workout, ProgressLog, FitnessPlan, DietChart } from '../../types';
-import { RootStackParamList } from '../../types/navigation';
+import { RootStackParamList, AdminTabParamList } from '../../types/navigation';
 import QRModal from '../../components/QRModal';
 
-type AdminNavigationProp = StackNavigationProp<RootStackParamList>;
+type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabParamList>;
 
 const AdminDashboardScreen = () => {
   const navigation = useNavigation<AdminNavigationProp>();
@@ -153,30 +153,29 @@ const AdminDashboardScreen = () => {
               value={stats.totalMembers}
               icon="people"
               color="#007AFF"
+              onPress={() => navigation.navigate('Users')}
             />
             <StatCard
               title="Workouts"
               value={stats.totalWorkouts}
               icon="fitness"
               color="#34C759"
+              onPress={() => navigation.navigate('Workouts')}
             />
-            <StatCard
-              title="Progress Logs"
-              value={stats.totalProgressLogs}
-              icon="trending-up"
-              color="#FF9500"
-            />
+
             <StatCard
               title="Fitness Plans"
               value={stats.totalFitnessPlans}
               icon="flag"
               color="#AF52DE"
+              onPress={() => navigation.navigate('Fitness Plans')}
             />
             <StatCard
               title="Diet Charts"
               value={stats.totalDietCharts}
               icon="restaurant"
               color="#FF3B30"
+              onPress={() => navigation.navigate('Diet Charts')}
             />
             <StatCard
               title="QR Code"
@@ -194,31 +193,26 @@ const AdminDashboardScreen = () => {
               title="Manage Users"
               description="View, edit, and manage member accounts"
               icon="people"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('Users')}
             />
             <QuickActionCard
               title="View Workouts"
               description="Monitor all workout activities"
               icon="fitness"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('Workouts')}
             />
-            <QuickActionCard
-              title="Track Progress"
-              description="Review member progress logs"
-              icon="trending-up"
-              onPress={() => {}}
-            />
+
             <QuickActionCard
               title="Fitness Plans"
               description="Manage fitness plans and templates"
               icon="flag"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('Fitness Plans')}
             />
             <QuickActionCard
               title="Diet Charts"
               description="Manage diet charts and meal plans"
               icon="restaurant"
-              onPress={() => {}}
+              onPress={() => navigation.navigate('Diet Charts')}
             />
             <QuickActionCard
               title="Show QR Code"

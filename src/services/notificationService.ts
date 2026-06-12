@@ -11,6 +11,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false, // Disabled for Expo Go compatibility
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -138,6 +140,7 @@ class NotificationService {
   private async createUrgentRenewalNotification(member: Member, daysUntilExpiry: number): Promise<void> {
     const notification: Omit<Notification, 'id'> = {
       userId: member.id,
+      clanId: member.clanId,
       title: '⚠️ Urgent: Membership Expiring Soon!',
       message: `Your membership expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? '' : 's'}. Renew now to avoid interruption in your fitness journey!`,
       type: 'membership_renewal',
@@ -159,7 +162,7 @@ class NotificationService {
       await this.scheduleLocalNotification(
         notification.title,
         notification.message,
-        { seconds: 2 } // Small delay to ensure it shows
+        null
       );
     } catch (error) {
       console.log('Local notification failed (expected in some cases):', error);
@@ -170,6 +173,7 @@ class NotificationService {
   private async createRenewalReminderNotification(member: Member, daysUntilExpiry: number): Promise<void> {
     const notification: Omit<Notification, 'id'> = {
       userId: member.id,
+      clanId: member.clanId,
       title: '📅 Membership Renewal Reminder',
       message: `Your membership will expire on ${member.membershipEndDate.toLocaleDateString()}. Consider renewing to continue your fitness journey!`,
       type: 'membership_renewal',
@@ -194,6 +198,7 @@ class NotificationService {
   private async createExpiredMembershipNotification(member: Member): Promise<void> {
     const notification: Omit<Notification, 'id'> = {
       userId: member.id,
+      clanId: member.clanId,
       title: '❌ Membership Expired',
       message: 'Your membership has expired. Please renew to continue accessing gym facilities and services.',
       type: 'membership_renewal',
@@ -215,7 +220,7 @@ class NotificationService {
       await this.scheduleLocalNotification(
         notification.title,
         notification.message,
-        { seconds: 2 }
+        null
       );
     } catch (error) {
       console.log('Local notification failed (expected in some cases):', error);
@@ -263,7 +268,7 @@ class NotificationService {
         trigger: {
           hour: 9,
           minute: 0,
-          repeats: true,
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
         },
       });
     } catch (error) {
@@ -286,7 +291,12 @@ class NotificationService {
       return await Notifications.getPermissionsAsync();
     } catch (error) {
       console.log('Error getting notification settings:', error);
-      return { status: 'undetermined', granted: false, expires: 'never' };
+      return { 
+        status: Notifications.PermissionStatus.UNDETERMINED, 
+        granted: false, 
+        expires: 'never',
+        canAskAgain: true 
+      };
     }
   }
 

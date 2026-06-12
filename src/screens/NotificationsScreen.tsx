@@ -4,207 +4,131 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
-  Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import firebaseService from '../services/firebaseService';
 import { Notification } from '../types';
-import RefreshHeader from '../components/RefreshHeader';
+import { COLORS, GRADIENTS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
 
 const NotificationsScreen = () => {
-  const navigation = useNavigation();
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
+  useEffect(() => { loadNotifications(); }, []);
 
   const loadNotifications = async () => {
+    if (!user?.id) { setIsLoading(false); return; }
     try {
-      if (user?.memberId) {
-        const userNotifications = await firebaseService.getNotificationsByUser(user.memberId);
-        setNotifications(userNotifications);
-      }
+      const data = await firebaseService.getNotificationsByUser(user.id);
+      setNotifications(data);
     } catch (error) {
       console.error('Error loading notifications:', error);
-      Alert.alert('Error', 'Failed to load notifications');
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadNotifications();
-    setRefreshing(false);
-  };
+  const onRefresh = async () => { setRefreshing(true); await loadNotifications(); setRefreshing(false); };
 
-  const markAsRead = async (notificationId: string) => {
+  const handleMarkAsRead = async (id: string) => {
     try {
-      await firebaseService.markNotificationAsRead(notificationId);
-      // Update local state
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, isRead: true }
-            : notification
-        )
-      );
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
+      await firebaseService.markNotificationAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+    } catch (error) { console.error('Error marking notification as read:', error); }
   };
 
-  const deleteNotification = async (notificationId: string) => {
-    Alert.alert(
-      'Delete Notification',
-      'Are you sure you want to delete this notification?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await firebaseService.deleteNotification(notificationId);
-              setNotifications(prev => prev.filter(n => n.id !== notificationId));
-            } catch (error) {
-              console.error('Error deleting notification:', error);
-              Alert.alert('Error', 'Failed to delete notification');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const getNotificationIcon = (type: string) => {
+  const getNotificationIcon = (type: string): any => {
     switch (type) {
-      case 'membership_renewal':
-        return 'calendar-outline';
-      case 'warning':
-        return 'warning-outline';
-      case 'success':
-        return 'checkmark-circle-outline';
-      case 'error':
-        return 'close-circle-outline';
-      default:
-        return 'information-circle-outline';
+      case 'success': return 'checkmark-circle';
+      case 'warning': return 'warning';
+      case 'error': return 'alert-circle';
+      case 'membership_renewal': return 'card';
+      default: return 'information-circle';
     }
   };
 
   const getNotificationColor = (type: string) => {
     switch (type) {
-      case 'membership_renewal':
-        return '#FF6B35';
-      case 'warning':
-        return '#FF9500';
-      case 'success':
-        return '#34C759';
-      case 'error':
-        return '#FF3B30';
-      default:
-        return '#007AFF';
+      case 'success': return COLORS.success;
+      case 'warning': return COLORS.warning;
+      case 'error': return COLORS.danger;
+      case 'membership_renewal': return COLORS.info;
+      default: return COLORS.primary;
     }
   };
 
-  const renderNotification = ({ item }: { item: Notification }) => (
-    <TouchableOpacity
-      style={[
-        styles.notificationCard,
-        !item.isRead && styles.unreadNotification
-      ]}
-      onPress={() => markAsRead(item.id)}
-    >
-      <View style={styles.notificationHeader}>
-        <View style={styles.notificationIconContainer}>
-          <Ionicons
-            name={getNotificationIcon(item.type) as any}
-            size={24}
-            color={getNotificationColor(item.type)}
-          />
-        </View>
-        <View style={styles.notificationContent}>
-          <Text style={styles.notificationTitle}>{item.title}</Text>
-          <Text style={styles.notificationMessage}>{item.message}</Text>
-          <Text style={styles.notificationTime}>
-            {new Date(item.createdAt).toLocaleDateString()} at{' '}
-            {new Date(item.createdAt).toLocaleTimeString()}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => deleteNotification(item.id)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-        </TouchableOpacity>
-      </View>
-      
-      {item.data && item.type === 'membership_renewal' && (
-        <View style={styles.membershipInfo}>
-          <Text style={styles.membershipInfoText}>
-            Membership Fee: ${item.data.membershipFee}
-          </Text>
-          <Text style={styles.membershipInfoText}>
-            Expires: {new Date(item.data.membershipEndDate!).toLocaleDateString()}
-          </Text>
-          {item.data.daysUntilExpiry !== undefined && (
-            <Text style={[
-              styles.daysUntilExpiry,
-              item.data.daysUntilExpiry <= 7 ? styles.urgent : styles.warning
-            ]}>
-              {item.data.daysUntilExpiry === 0 
-                ? 'Expired today' 
-                : `${item.data.daysUntilExpiry} day${item.data.daysUntilExpiry === 1 ? '' : 's'} remaining`
-              }
-            </Text>
-          )}
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
-  if (isLoading) {
+  const renderNotification = ({ item }: { item: Notification }) => {
+    const color = getNotificationColor(item.type);
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading notifications...</Text>
-      </View>
+      <Pressable
+        style={({ pressed }) => [
+          styles.notifCard,
+          !item.isRead && styles.unreadCard,
+          pressed && styles.cardPressed,
+        ]}
+        onPress={() => !item.isRead && handleMarkAsRead(item.id)}
+      >
+        <View style={[styles.notifIcon, { backgroundColor: color + '15' }]}>
+          <Ionicons name={getNotificationIcon(item.type)} size={20} color={color} />
+        </View>
+        <View style={styles.notifContent}>
+          <Text style={styles.notifTitle}>{item.title}</Text>
+          <Text style={styles.notifMessage} numberOfLines={2}>{item.message}</Text>
+          <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
+        </View>
+        {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: color }]} />}
+      </Pressable>
     );
-  }
+  };
 
   return (
     <View style={styles.container}>
-      <RefreshHeader
-        title="Notifications"
-        subtitle={`${notifications.length} notification${notifications.length !== 1 ? 's' : ''}`}
-        onRefresh={onRefresh}
-        showBackButton={true}
-        gradientColors={['#667eea', '#764ba2']}
-      />
+      <LinearGradient colors={GRADIENTS.notification} style={styles.headerGradient}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]} onPress={onRefresh}>
+            <Ionicons name="refresh" size={20} color={COLORS.textWhite} />
+          </Pressable>
+        </View>
+        <Text style={styles.headerSubtitle}>
+          {notifications.filter(n => !n.isRead).length > 0
+            ? `${notifications.filter(n => !n.isRead).length} unread notifications`
+            : 'All caught up!'}
+        </Text>
+      </LinearGradient>
 
       <FlatList
         data={notifications}
         renderItem={renderNotification}
         keyExtractor={(item) => item.id}
-        style={styles.notificationsList}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        showsVerticalScrollIndicator={Platform.OS !== 'web'}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={64} color="#C7C7CC" />
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="notifications-outline" size={64} color={COLORS.primary} />
+            </View>
             <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptyMessage}>
-              You're all caught up! Check back later for updates.
-            </Text>
+            <Text style={styles.emptySubtitle}>You're all caught up! Check back later for updates.</Text>
           </View>
         }
       />
@@ -213,113 +137,42 @@ const NotificationsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F2F7',
+  container: { flex: 1, backgroundColor: COLORS.background },
+  headerGradient: {
+    paddingTop: Platform.OS === 'web' ? 20 : 50, paddingBottom: 20, paddingHorizontal: 20,
+    borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  headerTitle: { ...TYPOGRAPHY.h2, color: COLORS.textWhite },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  notificationsList: {
-    flex: 1,
-    padding: 16,
+  headerSubtitle: { ...TYPOGRAPHY.bodySmall, color: 'rgba(255,255,255,0.8)' },
+  list: { flex: 1 },
+  listContent: { padding: 20, paddingBottom: 40 },
+  notifCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16,
+    flexDirection: 'row', alignItems: 'flex-start', ...SHADOWS.small, marginBottom: 10, gap: 12,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  notificationCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  unreadCard: { borderLeftWidth: 3, borderLeftColor: COLORS.primary },
+  cardPressed: { opacity: 0.95 },
+  notifIcon: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  notifContent: { flex: 1 },
+  notifTitle: { ...TYPOGRAPHY.label, color: COLORS.textPrimary, marginBottom: 4 },
+  notifMessage: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, lineHeight: 20 },
+  notifTime: { ...TYPOGRAPHY.caption, color: COLORS.textTertiary, marginTop: 6 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconContainer: {
+    width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.primaryLight + '15',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
   },
-  unreadNotification: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#007AFF',
-  },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  notificationIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F2F2F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  notificationContent: {
-    flex: 1,
-  },
-  notificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 4,
-  },
-  notificationMessage: {
-    fontSize: 14,
-    color: '#8E8E93',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  notificationTime: {
-    fontSize: 12,
-    color: '#C7C7CC',
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  membershipInfo: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
-  },
-  membershipInfoText: {
-    fontSize: 13,
-    color: '#8E8E93',
-    marginBottom: 2,
-  },
-  daysUntilExpiry: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 4,
-  },
-  urgent: {
-    color: '#FF3B30',
-  },
-  warning: {
-    color: '#FF9500',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#8E8E93',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: '#C7C7CC',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
+  emptyTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: 8 },
+  emptySubtitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
+  pressed: { opacity: 0.7 },
 });
 
-export default NotificationsScreen; 
+export default NotificationsScreen;

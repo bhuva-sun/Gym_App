@@ -12,11 +12,15 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList, AdminTabParamList } from '../../types/navigation';
+
+type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabParamList>;
 import firebaseService from '../../services/firebaseService';
 import { FitnessPlan, Member } from '../../types';
 
 const AdminFitnessPlansScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<AdminNavigationProp>();
   const [fitnessPlans, setFitnessPlans] = useState<FitnessPlan[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [refreshing, setRefreshing] = useState(false);

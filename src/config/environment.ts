@@ -6,12 +6,12 @@ export const ENV = {
   FIREBASE: {
     // TODO: Replace these with your actual Firebase project configuration
     // Get these values from your Firebase project settings
-    API_KEY: "AIzaSyAXiH6Ico0AxoSYlFN1MUxbJ_UbgvUca7Y",
-    AUTH_DOMAIN: "gymapp-77199.firebaseapp.com",
-    PROJECT_ID: "gymapp-77199",
-    STORAGE_BUCKET: "gymapp-77199.firebasestorage.app",
-    MESSAGING_SENDER_ID: "491835332207",
-    APP_ID: "1:491835332207:web:618019b0c947be42429f9a",
+    API_KEY: "AIzaSyBM-9Rc6VNduYXZwUCMpcIwhSp2hdNLxkU",
+    AUTH_DOMAIN: "thegymeye-app-bhuvan.firebaseapp.com",
+    PROJECT_ID: "thegymeye-app-bhuvan",
+    STORAGE_BUCKET: "thegymeye-app-bhuvan.firebasestorage.app",
+    MESSAGING_SENDER_ID: "859340895542",
+    APP_ID: "1:859340895542:web:edaea90f9a6b55ee24ef97",
     // Optional: Add these if you want to use Analytics or Realtime Database
     MEASUREMENT_ID: "", // Optional: for Google Analytics
     DATABASE_URL: "", // Optional: for Realtime Database

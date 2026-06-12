@@ -4,334 +4,182 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
+  RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import firebaseService from '../services/firebaseService';
 import { FitnessPlan } from '../types';
+import { COLORS, GRADIENTS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
 
 const FitnessPlanScreen = () => {
   const { user } = useAuth();
   const [fitnessPlan, setFitnessPlan] = useState<FitnessPlan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadFitnessPlan();
-  }, []);
+  useEffect(() => { loadFitnessPlan(); }, []);
 
   const loadFitnessPlan = async () => {
-    if (!user?.memberId) return;
-
+    if (!user?.memberId) { setIsLoading(false); return; }
     try {
       const plan = await firebaseService.getFitnessPlanByMember(user.memberId);
       setFitnessPlan(plan);
     } catch (error) {
       console.error('Error loading fitness plan:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  const getDayName = (dayOfWeek: number) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[dayOfWeek];
+  const onRefresh = async () => { setRefreshing(true); await loadFitnessPlan(); setRefreshing(false); };
+
+  const formatDate = (date: Date | string) => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const getWorkoutTypeIcon = (type: string) => {
-    switch (type) {
-      case 'cardio':
-        return 'heart';
-      case 'strength':
-        return 'fitness';
-      case 'flexibility':
-        return 'body';
-      case 'mixed':
-        return 'grid';
-      default:
-        return 'fitness';
-    }
-  };
-
-  const getWorkoutTypeColor = (type: string) => {
-    switch (type) {
-      case 'cardio':
-        return '#F44336';
-      case 'strength':
-        return '#2196F3';
-      case 'flexibility':
-        return '#4CAF50';
-      case 'mixed':
-        return '#FF9800';
-      default:
-        return '#666';
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading fitness plan...</Text>
-      </View>
-    );
-  }
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Fitness Plan</Text>
+    <View style={styles.container}>
+      <LinearGradient colors={GRADIENTS.fitness} style={styles.headerGradient}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Fitness Plan</Text>
+          <Pressable style={({ pressed }) => [styles.headerBtn, pressed && styles.pressed]} onPress={onRefresh}>
+            <Ionicons name="refresh" size={20} color={COLORS.textWhite} />
+          </Pressable>
+        </View>
+        <Text style={styles.headerSubtitle}>Your personalized workout plan</Text>
       </LinearGradient>
 
-      {fitnessPlan ? (
-        <>
-          {/* Plan Overview */}
-          <View style={styles.planOverview}>
-            <Text style={styles.planTitle}>{fitnessPlan.name}</Text>
-            <Text style={styles.planDescription}>{fitnessPlan.description}</Text>
-            
-            <View style={styles.planStats}>
-              <View style={styles.statItem}>
-                <Ionicons name="flag" size={20} color="#667eea" />
-                <Text style={styles.statLabel}>Goal</Text>
-                <Text style={styles.statValue}>{fitnessPlan.goal.replace('_', ' ').toUpperCase()}</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="calendar" size={20} color="#4CAF50" />
-                <Text style={styles.statLabel}>Duration</Text>
-                <Text style={styles.statValue}>{Math.ceil((new Date(fitnessPlan.endDate).getTime() - new Date(fitnessPlan.startDate).getTime()) / (1000 * 60 * 60 * 24 * 7))} weeks</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="fitness" size={20} color="#FF9800" />
-                <Text style={styles.statLabel}>Workouts</Text>
-                <Text style={styles.statValue}>{fitnessPlan.workoutTemplates.length}</Text>
+      <ScrollView
+        style={[styles.scrollView, Platform.OS === 'web' && { overflow: 'auto' as any }]}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        showsVerticalScrollIndicator={Platform.OS !== 'web'}
+      >
+        {fitnessPlan ? (
+          <View>
+            <View style={styles.planHeader}>
+              <Text style={styles.planName}>{fitnessPlan.name}</Text>
+              <View style={[styles.goalBadge, { backgroundColor: COLORS.warning + '15' }]}>
+                <Text style={[styles.goalText, { color: COLORS.warning }]}>
+                  {fitnessPlan.goal.replace(/_/g, ' ').toUpperCase()}
+                </Text>
               </View>
             </View>
-          </View>
+            <Text style={styles.planDesc}>{fitnessPlan.description}</Text>
+            <View style={styles.dateRow}>
+              <View style={styles.dateItem}>
+                <Ionicons name="calendar" size={16} color={COLORS.success} />
+                <Text style={styles.dateText}>Start: {formatDate(fitnessPlan.startDate)}</Text>
+              </View>
+              <View style={styles.dateItem}>
+                <Ionicons name="calendar-outline" size={16} color={COLORS.danger} />
+                <Text style={styles.dateText}>End: {formatDate(fitnessPlan.endDate)}</Text>
+              </View>
+            </View>
 
-          {/* Workout Schedule */}
-          <View style={styles.workoutSchedule}>
-            <Text style={styles.sectionTitle}>Weekly Workout Schedule</Text>
-            
-            {fitnessPlan.workoutTemplates.map((workout, index) => (
-              <View key={workout.id} style={styles.workoutDay}>
-                <View style={styles.dayHeader}>
-                  <View style={[styles.workoutIcon, { backgroundColor: getWorkoutTypeColor(workout.type) }]}>
-                    <Ionicons name={getWorkoutTypeIcon(workout.type) as any} size={20} color="white" />
+            {fitnessPlan.workoutTemplates.map((template) => (
+              <View key={template.id} style={styles.templateCard}>
+                <View style={styles.templateHeader}>
+                  <View style={styles.dayBadge}>
+                    <Text style={styles.dayText}>{dayNames[template.dayOfWeek].slice(0, 3)}</Text>
                   </View>
-                  <View style={styles.dayInfo}>
-                    <Text style={styles.dayName}>{getDayName(workout.dayOfWeek)}</Text>
-                    <Text style={styles.workoutName}>{workout.name}</Text>
-                  </View>
-                  <View style={styles.workoutDuration}>
-                    <Text style={styles.durationText}>{workout.duration} min</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.templateName}>{template.name}</Text>
+                    <Text style={styles.templateMeta}>{template.duration} min • {template.type}</Text>
                   </View>
                 </View>
-
-                {workout.exercises && workout.exercises.length > 0 && (
-                  <View style={styles.exercisesList}>
-                    {workout.exercises.map((exercise) => (
-                      <View key={exercise.id} style={styles.exerciseItem}>
-                        <View style={styles.exerciseInfo}>
-                          <Text style={styles.exerciseName}>{exercise.name}</Text>
-                          <Text style={styles.exerciseDetails}>
-                            {exercise.sets} sets × {exercise.reps} reps
-                            {exercise.weight && ` @ ${exercise.weight}kg`}
-                            {exercise.duration && ` for ${exercise.duration}s`}
-                          </Text>
-                        </View>
-                        {exercise.instructions && (
-                          <Text style={styles.exerciseInstructions}>{exercise.instructions}</Text>
-                        )}
-                      </View>
-                    ))}
+                {template.exercises.map((ex) => (
+                  <View key={ex.id} style={styles.exerciseRow}>
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                    <Text style={styles.exerciseName}>{ex.name}</Text>
+                    <Text style={styles.exerciseSets}>{ex.sets}×{ex.reps}</Text>
                   </View>
-                )}
+                ))}
               </View>
             ))}
           </View>
-        </>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Ionicons name="calendar-outline" size={80} color="#ccc" />
-          <Text style={styles.emptyTitle}>No Fitness Plan Assigned</Text>
-          <Text style={styles.emptySubtitle}>
-            Your trainer will assign you a personalized fitness plan based on your goals and current fitness level.
-          </Text>
-        </View>
-      )}
-    </ScrollView>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons name="flag-outline" size={64} color={COLORS.warning} />
+            </View>
+            <Text style={styles.emptyTitle}>No Fitness Plan Assigned</Text>
+            <Text style={styles.emptySubtitle}>
+              Your trainer will design a personalized fitness plan based on your goals and current fitness level.
+            </Text>
+            <Pressable style={({ pressed }) => [styles.contactBtn, pressed && styles.contactPressed]}>
+              <Ionicons name="chatbubble-outline" size={18} color={COLORS.textWhite} />
+              <Text style={styles.contactBtnText}>Contact Trainer</Text>
+            </Pressable>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  container: { flex: 1, backgroundColor: COLORS.background },
+  headerGradient: {
+    paddingTop: Platform.OS === 'web' ? 20 : 50, paddingBottom: 20, paddingHorizontal: 20,
+    borderBottomLeftRadius: RADIUS.xxl, borderBottomRightRadius: RADIUS.xxl,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  headerTitle: { ...TYPOGRAPHY.h2, color: COLORS.textWhite },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  header: {
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+  headerSubtitle: { ...TYPOGRAPHY.bodySmall, color: 'rgba(255,255,255,0.8)' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  planName: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary },
+  goalBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: RADIUS.full },
+  goalText: { ...TYPOGRAPHY.caption, fontWeight: '600' },
+  planDesc: { ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, marginBottom: 16 },
+  dateRow: { flexDirection: 'row', gap: 16, marginBottom: 16 },
+  dateItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dateText: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary },
+  templateCard: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16,
+    ...SHADOWS.small, marginBottom: 12,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+  templateHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  dayBadge: {
+    width: 42, height: 42, borderRadius: 12, backgroundColor: COLORS.primary + '15',
+    justifyContent: 'center', alignItems: 'center',
   },
-  planOverview: {
-    backgroundColor: 'white',
-    margin: 20,
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  dayText: { ...TYPOGRAPHY.label, color: COLORS.primary, fontWeight: '700' },
+  templateName: { ...TYPOGRAPHY.label, color: COLORS.textPrimary },
+  templateMeta: { ...TYPOGRAPHY.caption, color: COLORS.textTertiary, marginTop: 2 },
+  exerciseRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6,
+    borderTopWidth: 1, borderTopColor: COLORS.divider,
   },
-  planTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+  exerciseName: { ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary, flex: 1 },
+  exerciseSets: { ...TYPOGRAPHY.label, color: COLORS.textSecondary },
+  emptyContainer: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 40 },
+  emptyIconContainer: {
+    width: 100, height: 100, borderRadius: 50, backgroundColor: COLORS.warning + '15',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 20,
   },
-  planDescription: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-    marginBottom: 20,
+  emptyTitle: { ...TYPOGRAPHY.h3, color: COLORS.textPrimary, marginBottom: 8 },
+  emptySubtitle: { ...TYPOGRAPHY.body, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+  contactBtn: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary,
+    paddingHorizontal: 24, paddingVertical: 12, borderRadius: RADIUS.full, gap: 8,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  planStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  statItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 5,
-  },
-  statValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 2,
-  },
-  workoutSchedule: {
-    marginHorizontal: 20,
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
-  },
-  workoutDay: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 20,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  workoutIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  dayInfo: {
-    flex: 1,
-  },
-  dayName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  workoutName: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  workoutDuration: {
-    alignItems: 'flex-end',
-  },
-  durationText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  exercisesList: {
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 15,
-  },
-  exerciseItem: {
-    marginBottom: 15,
-  },
-  exerciseInfo: {
-    marginBottom: 5,
-  },
-  exerciseName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  exerciseDetails: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  exerciseInstructions: {
-    fontSize: 13,
-    color: '#999',
-    fontStyle: 'italic',
-    marginTop: 5,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    marginTop: 100,
-  },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
+  contactPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  contactBtnText: { ...TYPOGRAPHY.button, color: COLORS.textWhite },
+  pressed: { opacity: 0.7 },
 });
 
-export default FitnessPlanScreen; 
+export default FitnessPlanScreen;

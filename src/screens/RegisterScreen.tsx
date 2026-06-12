@@ -3,16 +3,18 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { COLORS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
 
 const RegisterScreen = ({ navigation }: any) => {
   const [formData, setFormData] = useState({
@@ -25,16 +27,18 @@ const RegisterScreen = ({ navigation }: any) => {
     gender: 'male' as 'male' | 'female' | 'other',
     height: '',
     weight: '',
+    inviteCode: '',
   });
   const [isLoading, setIsLoading] = useState(false);
-  const { register } = useAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const { register, loginWithGoogle } = useAuth();
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleRegister = async () => {
-    // Validation
     if (!formData.name || !formData.email || !formData.password || !formData.phone || !formData.address || !formData.height || !formData.weight) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -52,7 +56,6 @@ const RegisterScreen = ({ navigation }: any) => {
 
     setIsLoading(true);
     try {
-      // Prepare member data
       const memberData = {
         name: formData.name,
         gender: formData.gender,
@@ -61,11 +64,12 @@ const RegisterScreen = ({ navigation }: any) => {
         email: formData.email,
         phone: formData.phone,
         address: formData.address,
+        clanId: '', // Will be set when joining a clan
         membershipStatus: 'active' as const,
         membershipFee: 600,
         membershipFeeStatus: 'paid' as const,
         membershipStartDate: new Date(),
-        membershipEndDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+        membershipEndDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         lastPaymentDate: new Date().toISOString(),
         nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: new Date().toISOString(),
@@ -77,9 +81,7 @@ const RegisterScreen = ({ navigation }: any) => {
         }
       };
 
-      // Register user with Firebase
       await register(formData.email, formData.password, memberData);
-      
       Alert.alert('Success', 'Account created successfully!', [
         { text: 'OK', onPress: () => navigation.navigate('Login') }
       ]);
@@ -98,45 +100,97 @@ const RegisterScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleGoogleSignUp = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (error: any) {
+      let errorMessage = 'Google sign-up failed';
+      if (error.message.includes('popup-closed-by-user')) {
+        errorMessage = 'Sign-up was cancelled';
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
   return (
     <LinearGradient
-      colors={['#667eea', '#764ba2']}
+      colors={[COLORS.primaryGradientStart, COLORS.primaryGradientEnd]}
       style={styles.container}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          style={Platform.OS === 'web' ? { overflow: 'auto' as any } : undefined}
+        >
+          {/* Header */}
           <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
+            <Pressable
+              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
+              <Ionicons name="arrow-back" size={22} color={COLORS.textWhite} />
+            </Pressable>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join our fitness community</Text>
+            <Text style={styles.subtitle}>Join your fitness community</Text>
           </View>
 
+          {/* Form Card */}
           <View style={styles.formContainer}>
+            {/* Google Sign-Up */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.googleButton,
+                isGoogleLoading && styles.buttonDisabled,
+                pressed && !isGoogleLoading && styles.googleButtonPressed,
+              ]}
+              onPress={handleGoogleSignUp}
+              disabled={isGoogleLoading}
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator color={COLORS.textPrimary} size="small" />
+              ) : (
+                <>
+                  <View style={styles.googleIconContainer}>
+                    <Text style={styles.googleIconG}>G</Text>
+                  </View>
+                  <Text style={styles.googleButtonText}>Sign up with Google</Text>
+                </>
+              )}
+            </Pressable>
+
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or register with email</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Name */}
             <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="person-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Full Name"
-                placeholderTextColor="#666"
+                placeholder="Full Name *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.name}
                 onChangeText={(value) => handleInputChange('name', value)}
               />
             </View>
 
+            {/* Email */}
             <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="mail-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Email"
-                placeholderTextColor="#666"
+                placeholder="Email *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.email}
                 onChangeText={(value) => handleInputChange('email', value)}
                 keyboardType="email-address"
@@ -145,36 +199,39 @@ const RegisterScreen = ({ navigation }: any) => {
               />
             </View>
 
+            {/* Phone */}
             <View style={styles.inputContainer}>
-              <Ionicons name="call-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="call-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Phone Number"
-                placeholderTextColor="#666"
+                placeholder="Phone Number *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.phone}
                 onChangeText={(value) => handleInputChange('phone', value)}
                 keyboardType="phone-pad"
               />
             </View>
 
+            {/* Address */}
             <View style={styles.inputContainer}>
-              <Ionicons name="location-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="location-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Address"
-                placeholderTextColor="#666"
+                placeholder="Address *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.address}
                 onChangeText={(value) => handleInputChange('address', value)}
               />
             </View>
 
+            {/* Height & Weight */}
             <View style={styles.row}>
               <View style={[styles.inputContainer, styles.halfWidth]}>
-                <Ionicons name="resize-outline" size={20} color="#666" style={styles.inputIcon} />
+                <Ionicons name="resize-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Height (cm)"
-                  placeholderTextColor="#666"
+                  placeholder="Height (cm) *"
+                  placeholderTextColor={COLORS.textTertiary}
                   value={formData.height}
                   onChangeText={(value) => handleInputChange('height', value)}
                   keyboardType="numeric"
@@ -182,11 +239,11 @@ const RegisterScreen = ({ navigation }: any) => {
               </View>
 
               <View style={[styles.inputContainer, styles.halfWidth]}>
-                <Ionicons name="scale-outline" size={20} color="#666" style={styles.inputIcon} />
+                <Ionicons name="scale-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Weight (kg)"
-                  placeholderTextColor="#666"
+                  placeholder="Weight (kg) *"
+                  placeholderTextColor={COLORS.textTertiary}
                   value={formData.weight}
                   onChangeText={(value) => handleInputChange('weight', value)}
                   keyboardType="numeric"
@@ -194,75 +251,113 @@ const RegisterScreen = ({ navigation }: any) => {
               </View>
             </View>
 
+            {/* Gender Selector */}
             <View style={styles.genderContainer}>
-              <Text style={styles.genderLabel}>Gender:</Text>
+              <Text style={styles.fieldLabel}>Gender</Text>
               <View style={styles.genderButtons}>
                 {(['male', 'female', 'other'] as const).map((gender) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={gender}
-                    style={[
+                    style={({ pressed }) => [
                       styles.genderButton,
-                      formData.gender === gender && styles.genderButtonActive
+                      formData.gender === gender && styles.genderButtonActive,
+                      pressed && styles.pressed,
                     ]}
                     onPress={() => handleInputChange('gender', gender)}
                   >
+                    <Ionicons
+                      name={gender === 'male' ? 'male' : gender === 'female' ? 'female' : 'people'}
+                      size={16}
+                      color={formData.gender === gender ? COLORS.textWhite : COLORS.textSecondary}
+                    />
                     <Text style={[
                       styles.genderButtonText,
                       formData.gender === gender && styles.genderButtonTextActive
                     ]}>
                       {gender.charAt(0).toUpperCase() + gender.slice(1)}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
 
+            {/* Password */}
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#666"
+                placeholder="Password *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.password}
                 onChangeText={(value) => handleInputChange('password', value)}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={COLORS.textTertiary} />
+              </Pressable>
             </View>
 
+            {/* Confirm Password */}
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={COLORS.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
-                placeholder="Confirm Password"
-                placeholderTextColor="#666"
+                placeholder="Confirm Password *"
+                placeholderTextColor={COLORS.textTertiary}
                 value={formData.confirmPassword}
                 onChangeText={(value) => handleInputChange('confirmPassword', value)}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
             </View>
 
-            <TouchableOpacity
-              style={[styles.registerButton, isLoading && styles.registerButtonDisabled]}
+            {/* Invite Code (Optional) */}
+            <View style={[styles.inputContainer, styles.inviteContainer]}>
+              <Ionicons name="ticket-outline" size={18} color={COLORS.primary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Clan Invite Code (optional)"
+                placeholderTextColor={COLORS.textTertiary}
+                value={formData.inviteCode}
+                onChangeText={(value) => handleInputChange('inviteCode', value.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={6}
+              />
+            </View>
+            <Text style={styles.inviteHint}>
+              Got an invite code from your gym? Enter it to join their clan.
+            </Text>
+
+            {/* Register Button */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.registerButton,
+                isLoading && styles.buttonDisabled,
+                pressed && !isLoading && styles.buttonPressed,
+              ]}
               onPress={handleRegister}
               disabled={isLoading}
             >
-              <Text style={styles.registerButtonText}>
-                {isLoading ? 'Creating Account...' : 'Create Account'}
-              </Text>
-            </TouchableOpacity>
+              {isLoading ? (
+                <ActivityIndicator color={COLORS.textWhite} size="small" />
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              )}
+            </Pressable>
 
-            <TouchableOpacity
-              style={styles.loginLink}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.loginLinkText}>
-                Already have an account? <Text style={styles.loginLinkBold}>Login</Text>
-              </Text>
-            </TouchableOpacity>
+            {/* Login Link */}
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <Pressable
+                onPress={() => navigation.navigate('Login')}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={styles.loginLink}>Sign In</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -279,132 +374,209 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 50,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
   },
   backButton: {
     position: 'absolute',
     left: 0,
     top: 0,
-    padding: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    marginTop: 20,
+    ...TYPOGRAPHY.h1,
+    color: COLORS.textWhite,
+    marginTop: 10,
   },
   subtitle: {
-    fontSize: 16,
+    ...TYPOGRAPHY.bodySmall,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 5,
-    textAlign: 'center',
+    marginTop: 6,
   },
   formContainer: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    padding: 24,
+    ...SHADOWS.large,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    height: 48,
+    backgroundColor: COLORS.surface,
+    marginBottom: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
+  },
+  googleButtonPressed: {
+    backgroundColor: COLORS.surfaceSecondary,
+    transform: [{ scale: 0.98 }],
+  },
+  googleIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: COLORS.googleBlue,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  googleIconG: {
+    color: COLORS.textWhite,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  googleButtonText: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textPrimary,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textTertiary,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    backgroundColor: '#f8f9fa',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.md,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    backgroundColor: COLORS.surfaceSecondary,
+    height: 48,
+  },
+  inviteContainer: {
+    borderColor: COLORS.primaryLight,
+    borderStyle: 'dashed',
+    backgroundColor: '#F5F3FF',
+  },
+  inviteHint: {
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textTertiary,
+    marginBottom: 16,
+    marginTop: -4,
+    paddingHorizontal: 4,
   },
   inputIcon: {
     marginRight: 10,
   },
   input: {
     flex: 1,
-    height: 50,
-    fontSize: 16,
-    color: '#333',
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    height: '100%',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
+  },
+  eyeButton: {
+    padding: 4,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 10,
   },
   halfWidth: {
-    width: '48%',
+    flex: 1,
   },
   genderContainer: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
-  genderLabel: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 10,
+  fieldLabel: {
+    ...TYPOGRAPHY.label,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
   },
   genderButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   genderButton: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginHorizontal: 5,
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.sm,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surfaceSecondary,
+    gap: 6,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
   genderButtonActive: {
-    backgroundColor: '#667eea',
-    borderColor: '#667eea',
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
   genderButtonText: {
-    color: '#666',
-    fontSize: 14,
+    ...TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
     fontWeight: '500',
   },
   genderButtonTextActive: {
-    color: 'white',
+    color: COLORS.textWhite,
   },
   registerButton: {
-    backgroundColor: '#667eea',
-    borderRadius: 12,
-    height: 50,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    height: 48,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  registerButtonDisabled: {
-    backgroundColor: '#ccc',
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   registerButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    ...TYPOGRAPHY.button,
+    color: COLORS.textWhite,
+  },
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  loginText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.textSecondary,
   },
   loginLink: {
-    alignItems: 'center',
+    ...TYPOGRAPHY.bodySmall,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
-  loginLinkText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  loginLinkBold: {
-    color: '#667eea',
-    fontWeight: 'bold',
+  pressed: {
+    opacity: 0.7,
   },
 });
 
-export default RegisterScreen; 
+export default RegisterScreen;

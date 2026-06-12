@@ -28,10 +28,15 @@ import {
   BodyMeasurements,
   Trainer,
   AuthUser,
-  Notification
+  Notification,
+  Clan
 } from '../types';
 
-// Helper function to convert Firestore timestamp to Date
+// Admin email
+const ADMIN_EMAIL = 'bhvanmadhur@gmail.com';
+
+// ========== Helpers ==========
+
 const convertTimestamp = (timestamp: any): Date => {
   if (timestamp instanceof Timestamp) {
     return timestamp.toDate();
@@ -39,23 +44,22 @@ const convertTimestamp = (timestamp: any): Date => {
   return timestamp;
 };
 
-// Helper function to convert Date to Firestore timestamp
 const convertToTimestamp = (date: Date): Timestamp => {
   return Timestamp.fromDate(date);
 };
 
-// Helper function to prepare data for Firestore (convert Date objects to timestamps)
 const prepareDataForFirestore = (data: any): any => {
   const prepared = { ...data };
   Object.keys(prepared).forEach(key => {
-    if (prepared[key] instanceof Date) {
+    if (prepared[key] === undefined) {
+      delete prepared[key];
+    } else if (prepared[key] instanceof Date) {
       prepared[key] = convertToTimestamp(prepared[key]);
     }
   });
   return prepared;
 };
 
-// Helper function to convert Firestore data back to our format
 const convertFromFirestore = (data: any): any => {
   const converted = { ...data };
   Object.keys(converted).forEach(key => {
@@ -66,7 +70,80 @@ const convertFromFirestore = (data: any): any => {
   return converted;
 };
 
-// Member operations
+// Generate a 6-char alphanumeric invite code
+export const generateInviteCode = (): string => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No ambiguous chars (0/O, 1/I)
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+// ========== Clan Operations ==========
+
+export const createClan = async (clanData: Omit<Clan, 'id'>): Promise<Clan> => {
+  try {
+    const docRef = await addDoc(collection(db, 'clans'), {
+      ...prepareDataForFirestore(clanData),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return { id: docRef.id, ...clanData };
+  } catch (error) {
+    console.error('Error creating clan:', error);
+    throw error;
+  }
+};
+
+export const getClan = async (id: string): Promise<Clan | null> => {
+  try {
+    const docRef = doc(db, 'clans', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as Clan;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting clan:', error);
+    throw error;
+  }
+};
+
+export const getClanByInviteCode = async (inviteCode: string): Promise<Clan | null> => {
+  try {
+    const q = query(
+      collection(db, 'clans'),
+      where('inviteCode', '==', inviteCode.toUpperCase()),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const docSnap = querySnapshot.docs[0];
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as Clan;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting clan by invite code:', error);
+    throw error;
+  }
+};
+
+export const updateClan = async (id: string, updates: Partial<Clan>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'clans', id);
+    await updateDoc(docRef, {
+      ...prepareDataForFirestore(updates),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating clan:', error);
+    throw error;
+  }
+};
+
+// ========== Member Operations ==========
+
 export const createMember = async (memberData: Omit<Member, 'id'>): Promise<Member> => {
   try {
     const docRef = await addDoc(collection(db, 'members'), {
@@ -74,11 +151,7 @@ export const createMember = async (memberData: Omit<Member, 'id'>): Promise<Memb
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...memberData
-    };
+    return { id: docRef.id, ...memberData };
   } catch (error) {
     console.error('Error creating member:', error);
     throw error;
@@ -89,16 +162,31 @@ export const getMember = async (id: string): Promise<Member | null> => {
   try {
     const docRef = doc(db, 'members', id);
     const docSnap = await getDoc(docRef);
-    
     if (docSnap.exists()) {
-      return {
-        id: docSnap.id,
-        ...convertFromFirestore(docSnap.data())
-      } as Member;
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as Member;
     }
     return null;
   } catch (error) {
     console.error('Error getting member:', error);
+    throw error;
+  }
+};
+
+export const getMemberByEmail = async (email: string): Promise<Member | null> => {
+  try {
+    const q = query(
+      collection(db, 'members'),
+      where('email', '==', email),
+      limit(1)
+    );
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const docSnap = querySnapshot.docs[0];
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as Member;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting member by email:', error);
     throw error;
   }
 };
@@ -129,7 +217,45 @@ export const getAllMembers = async (): Promise<Member[]> => {
   }
 };
 
-// Workout operations
+export const getMembersByClan = async (clanId: string): Promise<Member[]> => {
+  try {
+    const q = query(collection(db, 'members'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...convertFromFirestore(doc.data())
+    })) as Member[];
+  } catch (error) {
+    console.error('Error getting members by clan:', error);
+    throw error;
+  }
+};
+
+export const deleteMember = async (memberId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'members', memberId));
+  } catch (error) {
+    console.error('Error deleting member:', error);
+    throw error;
+  }
+};
+
+// ========== Workout Operations ==========
+
+export const getWorkout = async (id: string): Promise<Workout | null> => {
+  try {
+    const docRef = doc(db, 'workouts', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as Workout;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting workout:', error);
+    throw error;
+  }
+};
+
 export const createWorkout = async (workoutData: Omit<Workout, 'id'>): Promise<Workout> => {
   try {
     const docRef = await addDoc(collection(db, 'workouts'), {
@@ -137,11 +263,7 @@ export const createWorkout = async (workoutData: Omit<Workout, 'id'>): Promise<W
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...workoutData
-    };
+    return { id: docRef.id, ...workoutData };
   } catch (error) {
     console.error('Error creating workout:', error);
     throw error;
@@ -152,15 +274,14 @@ export const getWorkoutsByMember = async (memberId: string): Promise<Workout[]> 
   try {
     const q = query(
       collection(db, 'workouts'),
-      where('memberId', '==', memberId),
-      orderBy('date', 'desc')
+      where('memberId', '==', memberId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
+    const workouts = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
     })) as Workout[];
+    return workouts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   } catch (error) {
     console.error('Error getting workouts by member:', error);
     throw error;
@@ -190,7 +311,22 @@ export const deleteWorkout = async (id: string): Promise<void> => {
   }
 };
 
-// Fitness Plan operations
+// ========== Fitness Plan Operations ==========
+
+export const getFitnessPlan = async (id: string): Promise<FitnessPlan | null> => {
+  try {
+    const docRef = doc(db, 'fitnessPlans', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as FitnessPlan;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting fitness plan:', error);
+    throw error;
+  }
+};
+
 export const createFitnessPlan = async (planData: Omit<FitnessPlan, 'id'>): Promise<FitnessPlan> => {
   try {
     const docRef = await addDoc(collection(db, 'fitnessPlans'), {
@@ -198,11 +334,7 @@ export const createFitnessPlan = async (planData: Omit<FitnessPlan, 'id'>): Prom
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...planData
-    };
+    return { id: docRef.id, ...planData };
   } catch (error) {
     console.error('Error creating fitness plan:', error);
     throw error;
@@ -218,13 +350,9 @@ export const getFitnessPlanByMember = async (memberId: string): Promise<FitnessP
       limit(1)
     );
     const querySnapshot = await getDocs(q);
-    
     if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      return {
-        id: doc.id,
-        ...convertFromFirestore(doc.data())
-      } as FitnessPlan;
+      const docSnap = querySnapshot.docs[0];
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as FitnessPlan;
     }
     return null;
   } catch (error) {
@@ -246,7 +374,31 @@ export const updateFitnessPlan = async (id: string, updates: Partial<FitnessPlan
   }
 };
 
-// Progress Log operations
+export const deleteFitnessPlan = async (planId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'fitnessPlans', planId));
+  } catch (error) {
+    console.error('Error deleting fitness plan:', error);
+    throw error;
+  }
+};
+
+// ========== Progress Log Operations ==========
+
+export const getProgressLog = async (id: string): Promise<ProgressLog | null> => {
+  try {
+    const docRef = doc(db, 'progressLogs', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as ProgressLog;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting progress log:', error);
+    throw error;
+  }
+};
+
 export const createProgressLog = async (progressData: Omit<ProgressLog, 'id'>): Promise<ProgressLog> => {
   try {
     const docRef = await addDoc(collection(db, 'progressLogs'), {
@@ -254,11 +406,7 @@ export const createProgressLog = async (progressData: Omit<ProgressLog, 'id'>): 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...progressData
-    };
+    return { id: docRef.id, ...progressData };
   } catch (error) {
     console.error('Error creating progress log:', error);
     throw error;
@@ -269,15 +417,14 @@ export const getProgressLogsByMember = async (memberId: string): Promise<Progres
   try {
     const q = query(
       collection(db, 'progressLogs'),
-      where('memberId', '==', memberId),
-      orderBy('date', 'desc')
+      where('memberId', '==', memberId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
+    const logs = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
     })) as ProgressLog[];
+    return logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   } catch (error) {
     console.error('Error getting progress logs by member:', error);
     throw error;
@@ -307,7 +454,22 @@ export const deleteProgressLog = async (id: string): Promise<void> => {
   }
 };
 
-// Diet Chart operations
+// ========== Diet Chart Operations ==========
+
+export const getDietChart = async (id: string): Promise<DietChart | null> => {
+  try {
+    const docRef = doc(db, 'dietCharts', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as DietChart;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting diet chart:', error);
+    throw error;
+  }
+};
+
 export const createDietChart = async (dietData: Omit<DietChart, 'id'>): Promise<DietChart> => {
   try {
     const docRef = await addDoc(collection(db, 'dietCharts'), {
@@ -315,11 +477,7 @@ export const createDietChart = async (dietData: Omit<DietChart, 'id'>): Promise<
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...dietData
-    };
+    return { id: docRef.id, ...dietData };
   } catch (error) {
     console.error('Error creating diet chart:', error);
     throw error;
@@ -335,13 +493,9 @@ export const getDietChartByMember = async (memberId: string): Promise<DietChart 
       limit(1)
     );
     const querySnapshot = await getDocs(q);
-    
     if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      return {
-        id: doc.id,
-        ...convertFromFirestore(doc.data())
-      } as DietChart;
+      const docSnap = querySnapshot.docs[0];
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as DietChart;
     }
     return null;
   } catch (error) {
@@ -363,7 +517,17 @@ export const updateDietChart = async (id: string, updates: Partial<DietChart>): 
   }
 };
 
-// Auth User operations
+export const deleteDietChart = async (dietId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'dietCharts', dietId));
+  } catch (error) {
+    console.error('Error deleting diet chart:', error);
+    throw error;
+  }
+};
+
+// ========== Auth User Operations ==========
+
 export const createAuthUser = async (authData: Omit<AuthUser, 'id'>): Promise<AuthUser> => {
   try {
     const docRef = await addDoc(collection(db, 'authUsers'), {
@@ -371,11 +535,7 @@ export const createAuthUser = async (authData: Omit<AuthUser, 'id'>): Promise<Au
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...authData
-    };
+    return { id: docRef.id, ...authData };
   } catch (error) {
     console.error('Error creating auth user:', error);
     throw error;
@@ -390,13 +550,9 @@ export const getAuthUserByEmail = async (email: string): Promise<AuthUser | null
       limit(1)
     );
     const querySnapshot = await getDocs(q);
-    
     if (!querySnapshot.empty) {
-      const doc = querySnapshot.docs[0];
-      return {
-        id: doc.id,
-        ...convertFromFirestore(doc.data())
-      } as AuthUser;
+      const docSnap = querySnapshot.docs[0];
+      return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as AuthUser;
     }
     return null;
   } catch (error) {
@@ -418,7 +574,17 @@ export const updateAuthUser = async (id: string, updates: Partial<AuthUser>): Pr
   }
 };
 
-// Notification operations
+export const deleteAuthUser = async (userId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'authUsers', userId));
+  } catch (error) {
+    console.error('Error deleting auth user:', error);
+    throw error;
+  }
+};
+
+// ========== Notification Operations ==========
+
 export const createNotification = async (notificationData: Omit<Notification, 'id'>): Promise<Notification> => {
   try {
     const docRef = await addDoc(collection(db, 'notifications'), {
@@ -426,11 +592,7 @@ export const createNotification = async (notificationData: Omit<Notification, 'i
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    
-    return {
-      id: docRef.id,
-      ...notificationData
-    };
+    return { id: docRef.id, ...notificationData };
   } catch (error) {
     console.error('Error creating notification:', error);
     throw error;
@@ -441,33 +603,34 @@ export const getNotificationsByUser = async (userId: string): Promise<Notificati
   try {
     const q = query(
       collection(db, 'notifications'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
+    const notifications = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
     })) as Notification[];
+    return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
     console.error('Error getting notifications by user:', error);
     throw error;
   }
 };
 
-export const getAllNotifications = async (): Promise<Notification[]> => {
+export const getAllNotifications = async (clanId?: string): Promise<Notification[]> => {
   try {
-    const q = query(
-      collection(db, 'notifications'),
-      orderBy('createdAt', 'desc')
-    );
+    let q;
+    if (clanId) {
+      q = query(collection(db, 'notifications'), where('clanId', '==', clanId));
+    } else {
+      q = collection(db, 'notifications');
+    }
     const querySnapshot = await getDocs(q);
-    
-    return querySnapshot.docs.map(doc => ({
+    const notifications = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
     })) as Notification[];
+    return notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
     console.error('Error getting all notifications:', error);
     throw error;
@@ -497,23 +660,8 @@ export const deleteNotification = async (id: string): Promise<void> => {
   }
 };
 
-export const getMembersNeedingRenewal = async (daysThreshold: number = 30): Promise<Member[]> => {
-  try {
-    const members = await getAllMembers();
-    const today = new Date();
-    const thresholdDate = new Date(today.getTime() + (daysThreshold * 24 * 60 * 60 * 1000));
-    
-    return members.filter(member => {
-      const endDate = new Date(member.membershipEndDate);
-      return member.membershipStatus === 'active' && endDate <= thresholdDate;
-    });
-  } catch (error) {
-    console.error('Error getting members needing renewal:', error);
-    throw error;
-  }
-};
+// ========== Admin/Bulk Query Operations ==========
 
-// Admin Functions
 export const getAllAuthUsers = async (): Promise<AuthUser[]> => {
   try {
     const querySnapshot = await getDocs(collection(db, 'authUsers'));
@@ -579,43 +727,23 @@ export const getAllDietCharts = async (): Promise<DietChart[]> => {
   }
 };
 
-export const deleteMember = async (memberId: string): Promise<void> => {
+export const getMembersNeedingRenewal = async (daysThreshold: number = 30, clanId?: string): Promise<Member[]> => {
   try {
-    await deleteDoc(doc(db, 'members', memberId));
+    const members = clanId ? await getMembersByClan(clanId) : await getAllMembers();
+    const today = new Date();
+    const thresholdDate = new Date(today.getTime() + (daysThreshold * 24 * 60 * 60 * 1000));
+    return members.filter(member => {
+      const endDate = new Date(member.membershipEndDate);
+      return member.membershipStatus === 'active' && endDate <= thresholdDate;
+    });
   } catch (error) {
-    console.error('Error deleting member:', error);
+    console.error('Error getting members needing renewal:', error);
     throw error;
   }
 };
 
-export const deleteAuthUser = async (userId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'authUsers', userId));
-  } catch (error) {
-    console.error('Error deleting auth user:', error);
-    throw error;
-  }
-};
+// ========== Initialize Sample Data ==========
 
-export const deleteFitnessPlan = async (planId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'fitnessPlans', planId));
-  } catch (error) {
-    console.error('Error deleting fitness plan:', error);
-    throw error;
-  }
-};
-
-export const deleteDietChart = async (dietId: string): Promise<void> => {
-  try {
-    await deleteDoc(doc(db, 'dietCharts', dietId));
-  } catch (error) {
-    console.error('Error deleting diet chart:', error);
-    throw error;
-  }
-};
-
-// Initialize sample data for testing
 export const initializeSampleData = async (): Promise<void> => {
   try {
     // Check if sample data already exists
@@ -627,6 +755,16 @@ export const initializeSampleData = async (): Promise<void> => {
 
     console.log('Initializing sample data...');
 
+    // Create a default clan
+    const defaultClan = await createClan({
+      name: 'TheGymEye Fitness',
+      ownerId: 'admin',
+      ownerEmail: ADMIN_EMAIL,
+      inviteCode: generateInviteCode(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
     // Create sample members
     const member1 = await createMember({
       name: 'John Doe',
@@ -636,11 +774,12 @@ export const initializeSampleData = async (): Promise<void> => {
       height: 175,
       weight: 70,
       gender: 'male',
+      clanId: defaultClan.id,
       membershipStatus: 'active',
       membershipFee: 600,
       membershipFeeStatus: 'paid',
       membershipStartDate: new Date('2024-01-01'),
-      membershipEndDate: new Date('2024-12-31'),
+      membershipEndDate: new Date('2025-12-31'),
       lastPaymentDate: new Date().toISOString(),
       nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       createdAt: new Date().toISOString(),
@@ -660,11 +799,12 @@ export const initializeSampleData = async (): Promise<void> => {
       height: 165,
       weight: 55,
       gender: 'female',
+      clanId: defaultClan.id,
       membershipStatus: 'active',
       membershipFee: 600,
       membershipFeeStatus: 'paid',
       membershipStartDate: new Date('2024-01-01'),
-      membershipEndDate: new Date('2024-12-31'),
+      membershipEndDate: new Date('2025-12-31'),
       lastPaymentDate: new Date().toISOString(),
       nextPaymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       createdAt: new Date().toISOString(),
@@ -680,6 +820,7 @@ export const initializeSampleData = async (): Promise<void> => {
     await createAuthUser({
       email: 'john@example.com',
       memberId: member1.id,
+      clanId: defaultClan.id,
       role: 'member',
       isActive: true,
       createdAt: new Date().toISOString()
@@ -688,15 +829,17 @@ export const initializeSampleData = async (): Promise<void> => {
     await createAuthUser({
       email: 'jane@example.com',
       memberId: member2.id,
+      clanId: defaultClan.id,
       role: 'member',
       isActive: true,
       createdAt: new Date().toISOString()
     });
 
-    // Create admin user
+    // Create admin/owner user
     await createAuthUser({
-      email: 'admin@gymapp.com',
-      role: 'admin',
+      email: ADMIN_EMAIL,
+      role: 'owner',
+      clanId: defaultClan.id,
       isActive: true,
       createdAt: new Date().toISOString()
     });
@@ -704,6 +847,7 @@ export const initializeSampleData = async (): Promise<void> => {
     // Create sample workouts
     await createWorkout({
       memberId: member1.id,
+      clanId: defaultClan.id,
       date: new Date('2024-01-15'),
       duration: 60,
       type: 'strength',
@@ -736,6 +880,7 @@ export const initializeSampleData = async (): Promise<void> => {
     // Create sample progress logs
     await createProgressLog({
       memberId: member1.id,
+      clanId: defaultClan.id,
       date: new Date('2024-01-15'),
       weight: 70,
       bodyFat: 15,
@@ -760,43 +905,65 @@ export const initializeSampleData = async (): Promise<void> => {
   }
 };
 
-// Export as default for easier imports
+// ========== Default Export ==========
+
 export default {
+  // Clan
+  createClan,
+  getClan,
+  getClanByInviteCode,
+  updateClan,
+  generateInviteCode,
+  // Member
   createMember,
   getMember,
+  getMemberByEmail,
   updateMember,
   getAllMembers,
+  getMembersByClan,
+  deleteMember,
+  // Workout
+  getWorkout,
   createWorkout,
   getWorkoutsByMember,
   updateWorkout,
   deleteWorkout,
+  // Fitness Plan
+  getFitnessPlan,
   createFitnessPlan,
   getFitnessPlanByMember,
   updateFitnessPlan,
+  deleteFitnessPlan,
+  // Progress Log
+  getProgressLog,
   createProgressLog,
   getProgressLogsByMember,
   updateProgressLog,
   deleteProgressLog,
+  // Diet Chart
+  getDietChart,
   createDietChart,
   getDietChartByMember,
   updateDietChart,
+  deleteDietChart,
+  // Auth User
   createAuthUser,
   getAuthUserByEmail,
   updateAuthUser,
+  deleteAuthUser,
+  // Notifications
   createNotification,
   getNotificationsByUser,
+  getAllNotifications,
   markNotificationAsRead,
-  initializeSampleData,
+  deleteNotification,
+  // Admin
   getAllAuthUsers,
   getAllWorkouts,
   getAllProgressLogs,
   getAllFitnessPlans,
   getAllDietCharts,
-  deleteMember,
-  deleteAuthUser,
-  deleteFitnessPlan,
-  deleteDietChart,
-  getAllNotifications,
-  deleteNotification,
-  getMembersNeedingRenewal
-}; 
+  getMembersNeedingRenewal,
+  // Init
+  initializeSampleData,
+};

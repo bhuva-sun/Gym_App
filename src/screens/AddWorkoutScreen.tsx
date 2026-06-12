@@ -2,416 +2,276 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
-  TextInput,
-  TouchableOpacity,
+  Pressable,
   Alert,
-  KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import firebaseService from '../services/firebaseService';
-import { Exercise } from '../types';
+import { COLORS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
+
+const WORKOUT_TYPES = [
+  { key: 'strength', label: 'Strength', icon: 'fitness', color: COLORS.info },
+  { key: 'cardio', label: 'Cardio', icon: 'heart', color: COLORS.danger },
+  { key: 'flexibility', label: 'Flexibility', icon: 'body', color: COLORS.success },
+  { key: 'mixed', label: 'Mixed', icon: 'grid', color: COLORS.warning },
+] as const;
 
 const AddWorkoutScreen = ({ navigation }: any) => {
   const { user } = useAuth();
-  const [workoutData, setWorkoutData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    duration: '',
-    type: 'strength' as 'cardio' | 'strength' | 'flexibility' | 'mixed',
-    notes: '',
-    caloriesBurned: '',
-  });
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [workoutType, setWorkoutType] = useState<string>('strength');
+  const [workoutName, setWorkoutName] = useState('');
+  const [duration, setDuration] = useState('');
+  const [calories, setCalories] = useState('');
+  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const addExercise = () => {
-    const newExercise: Exercise = {
-      id: Date.now().toString(),
-      name: '',
-      sets: 0,
-      reps: 0,
-      weight: 0,
-      duration: 0,
-      restTime: 0,
-      notes: '',
-    };
-    setExercises([...exercises, newExercise]);
-  };
-
-  const updateExercise = (index: number, field: keyof Exercise, value: any) => {
-    const updatedExercises = [...exercises];
-    updatedExercises[index] = { ...updatedExercises[index], [field]: value };
-    setExercises(updatedExercises);
-  };
-
-  const removeExercise = (index: number) => {
-    setExercises(exercises.filter((_, i) => i !== index));
-  };
-
   const handleSave = async () => {
-    if (!workoutData.duration || exercises.length === 0) {
-      Alert.alert('Error', 'Please fill in duration and add at least one exercise');
+    if (!duration) {
+      Alert.alert('Error', 'Please enter workout duration');
+      return;
+    }
+
+    if (!user?.memberId) {
+      Alert.alert('Error', 'No member data found');
       return;
     }
 
     setIsLoading(true);
     try {
       await firebaseService.createWorkout({
-        memberId: user?.memberId || '',
-        date: new Date(workoutData.date),
-        duration: parseInt(workoutData.duration),
-        type: workoutData.type,
-        notes: workoutData.notes,
-        caloriesBurned: workoutData.caloriesBurned ? parseFloat(workoutData.caloriesBurned) : undefined,
-        exercises: exercises,
+        memberId: user.memberId,
+        clanId: user.clanId || '',
+        date: new Date(date),
+        duration: parseInt(duration),
+        type: workoutType as any,
+        name: workoutName || undefined,
+        caloriesBurned: calories ? parseInt(calories) : undefined,
+        notes: notes,
+        exercises: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-
-      Alert.alert('Success', 'Workout saved successfully!', [
+      Alert.alert('Success', 'Workout added successfully!', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
-      Alert.alert('Error', 'Failed to save workout');
+      console.error('Error adding workout:', error);
+      Alert.alert('Error', 'Failed to add workout');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView style={styles.scrollContainer}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add Workout</Text>
-        </View>
-
-        {/* Workout Details */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Workout Details</Text>
-          
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Date</Text>
-            <TextInput
-              style={styles.input}
-              value={workoutData.date}
-              onChangeText={(text) => setWorkoutData({ ...workoutData, date: text })}
-              placeholder="YYYY-MM-DD"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Duration (minutes)</Text>
-            <TextInput
-              style={styles.input}
-              value={workoutData.duration}
-              onChangeText={(text) => setWorkoutData({ ...workoutData, duration: text })}
-              placeholder="60"
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Type</Text>
-            <View style={styles.typeButtons}>
-              {(['cardio', 'strength', 'flexibility', 'mixed'] as const).map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.typeButton,
-                    workoutData.type === type && styles.typeButtonActive
-                  ]}
-                  onPress={() => setWorkoutData({ ...workoutData, type })}
-                >
-                  <Text style={[
-                    styles.typeButtonText,
-                    workoutData.type === type && styles.typeButtonTextActive
-                  ]}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Calories Burned (optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={workoutData.caloriesBurned}
-              onChangeText={(text) => setWorkoutData({ ...workoutData, caloriesBurned: text })}
-              placeholder="300"
-              keyboardType="numeric"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Notes (optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={workoutData.notes}
-              onChangeText={(text) => setWorkoutData({ ...workoutData, notes: text })}
-              placeholder="How did the workout feel?"
-              multiline
-              numberOfLines={3}
-            />
-          </View>
-        </View>
-
-        {/* Exercises */}
-        <View style={styles.section}>
-          <View style={styles.exercisesHeader}>
-            <Text style={styles.sectionTitle}>Exercises</Text>
-            <TouchableOpacity style={styles.addExerciseButton} onPress={addExercise}>
-              <Ionicons name="add" size={20} color="white" />
-              <Text style={styles.addExerciseButtonText}>Add Exercise</Text>
-            </TouchableOpacity>
-          </View>
-
-          {exercises.map((exercise, index) => (
-            <View key={exercise.id} style={styles.exerciseCard}>
-              <View style={styles.exerciseHeader}>
-                <Text style={styles.exerciseTitle}>Exercise {index + 1}</Text>
-                <TouchableOpacity onPress={() => removeExercise(index)}>
-                  <Ionicons name="trash-outline" size={20} color="#F44336" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Exercise Name</Text>
-                <TextInput
-                  style={styles.input}
-                  value={exercise.name}
-                  onChangeText={(text) => updateExercise(index, 'name', text)}
-                  placeholder="e.g., Bench Press"
-                />
-              </View>
-
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>Sets</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={exercise.sets.toString()}
-                    onChangeText={(text) => updateExercise(index, 'sets', parseInt(text) || 0)}
-                    placeholder="3"
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>Reps</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={exercise.reps.toString()}
-                    onChangeText={(text) => updateExercise(index, 'reps', parseInt(text) || 0)}
-                    placeholder="10"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>Weight (kg)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={exercise.weight?.toString() || ''}
-                    onChangeText={(text) => updateExercise(index, 'weight', parseFloat(text) || 0)}
-                    placeholder="50"
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <Text style={styles.inputLabel}>Rest Time (sec)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={exercise.restTime?.toString() || ''}
-                    onChangeText={(text) => updateExercise(index, 'restTime', parseInt(text) || 0)}
-                    placeholder="60"
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes (optional)</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  value={exercise.notes || ''}
-                  onChangeText={(text) => updateExercise(index, 'notes', text)}
-                  placeholder="Any notes about this exercise"
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Add Workout</Text>
+        <Pressable
+          style={({ pressed }) => [styles.saveBtn, pressed && styles.saveBtnPressed, isLoading && styles.disabled]}
           onPress={handleSave}
           disabled={isLoading}
         >
-          <Text style={styles.saveButtonText}>
-            {isLoading ? 'Saving...' : 'Save Workout'}
-          </Text>
-        </TouchableOpacity>
+          {isLoading ? (
+            <ActivityIndicator color={COLORS.primary} size="small" />
+          ) : (
+            <Text style={styles.saveBtnText}>Save</Text>
+          )}
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={[styles.scrollView, Platform.OS === 'web' && { overflow: 'auto' as any }]}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={Platform.OS !== 'web'}
+      >
+        {/* Workout Type */}
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Ionicons name="barbell-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.fieldLabel}>Workout Type</Text>
+          </View>
+          <View style={styles.typeGrid}>
+            {WORKOUT_TYPES.map((type) => (
+              <Pressable
+                key={type.key}
+                style={({ pressed }) => [
+                  styles.typeCard,
+                  workoutType === type.key && [styles.typeCardActive, { borderColor: type.color }],
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setWorkoutType(type.key)}
+              >
+                <View style={[styles.typeIconWrap, { backgroundColor: (workoutType === type.key ? type.color : COLORS.textTertiary) + '15' }]}>
+                  <Ionicons name={type.icon as any} size={20} color={workoutType === type.key ? type.color : COLORS.textTertiary} />
+                </View>
+                <Text style={[styles.typeLabel, workoutType === type.key && { color: type.color, fontWeight: '600' }]}>
+                  {type.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* Workout Name */}
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Ionicons name="text-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.fieldLabel}>Workout Name</Text>
+          </View>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter workout name (optional)"
+              placeholderTextColor={COLORS.textTertiary}
+              value={workoutName}
+              onChangeText={setWorkoutName}
+            />
+          </View>
+        </View>
+
+        {/* Date & Duration */}
+        <View style={styles.section}>
+          <View style={styles.rowFields}>
+            <View style={styles.halfField}>
+              <View style={styles.fieldRow}>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.fieldLabel}>Date</Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={COLORS.textTertiary}
+                />
+              </View>
+            </View>
+            <View style={styles.halfField}>
+              <View style={styles.fieldRow}>
+                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                <Text style={styles.fieldLabel}>Duration *</Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Minutes"
+                  placeholderTextColor={COLORS.textTertiary}
+                  value={duration}
+                  onChangeText={setDuration}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Calories */}
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Ionicons name="flame-outline" size={18} color={COLORS.warning} />
+            <Text style={styles.fieldLabel}>Calories Burned (Optional)</Text>
+          </View>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter calories"
+              placeholderTextColor={COLORS.textTertiary}
+              value={calories}
+              onChangeText={setCalories}
+              keyboardType="numeric"
+            />
+          </View>
+        </View>
+
+        {/* Notes */}
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.fieldLabel}>Notes (Optional)</Text>
+          </View>
+          <View style={[styles.inputContainer, styles.textAreaContainer]}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Add any notes about your workout..."
+              placeholderTextColor={COLORS.textTertiary}
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
+        </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  scrollContainer: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
-    backgroundColor: '#667eea',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingTop: Platform.OS === 'web' ? 16 : 50, paddingBottom: 16, paddingHorizontal: 20,
+    backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.surfaceSecondary,
+    justifyContent: 'center', alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  section: {
-    backgroundColor: 'white',
-    margin: 20,
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  headerTitle: { ...TYPOGRAPHY.h4, color: COLORS.textPrimary },
+  saveBtn: {
+    paddingHorizontal: 20, paddingVertical: 8, borderRadius: RADIUS.sm,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 15,
+  saveBtnPressed: { opacity: 0.7 },
+  saveBtnText: { ...TYPOGRAPHY.button, color: COLORS.primary },
+  disabled: { opacity: 0.5 },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 40 },
+  section: { marginBottom: 20 },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  fieldLabel: { ...TYPOGRAPHY.label, color: COLORS.textPrimary },
+  typeGrid: { flexDirection: 'row', gap: 10 },
+  typeCard: {
+    flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface, borderWidth: 2, borderColor: COLORS.borderLight,
+    ...SHADOWS.small, gap: 6,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
-  inputGroup: {
-    marginBottom: 15,
+  typeCardActive: { borderWidth: 2 },
+  typeIconWrap: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  typeLabel: { ...TYPOGRAPHY.caption, color: COLORS.textSecondary },
+  inputContainer: {
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.md, borderWidth: 1.5,
+    borderColor: COLORS.borderLight, paddingHorizontal: 16, height: 48,
+    justifyContent: 'center',
   },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 8,
-  },
+  textAreaContainer: { height: 100, paddingVertical: 12 },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
+    ...TYPOGRAPHY.bodySmall, color: COLORS.textPrimary, height: '100%',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
   },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  halfWidth: {
-    width: '48%',
-  },
-  typeButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  typeButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingVertical: 12,
-    marginHorizontal: 5,
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-  },
-  typeButtonActive: {
-    backgroundColor: '#667eea',
-    borderColor: '#667eea',
-  },
-  typeButtonText: {
-    color: '#666',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  typeButtonTextActive: {
-    color: 'white',
-  },
-  exercisesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  addExerciseButton: {
-    backgroundColor: '#4CAF50',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  addExerciseButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 5,
-  },
-  exerciseCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  exerciseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  exerciseTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  saveButton: {
-    backgroundColor: '#667eea',
-    margin: 20,
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  textArea: { textAlignVertical: 'top' },
+  rowFields: { flexDirection: 'row', gap: 12 },
+  halfField: { flex: 1 },
+  pressed: { opacity: 0.7 },
 });
 
-export default AddWorkoutScreen; 
+export default AddWorkoutScreen;

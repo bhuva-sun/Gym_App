@@ -6,19 +6,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
 import { RootStackParamList, MemberTabParamList, AdminTabParamList } from '../types/navigation';
 import NotificationBadge from '../components/NotificationBadge';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
+import { COLORS } from '../config/theme';
 
 // Auth screens
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
+import JoinClanScreen from '../screens/JoinClanScreen';
 
 // Member screens
 import DashboardScreen from '../screens/DashboardScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import WorkoutsScreen from '../screens/WorkoutsScreen';
 import AddWorkoutScreen from '../screens/AddWorkoutScreen';
-import ProgressScreen from '../screens/ProgressScreen';
-import AddProgressScreen from '../screens/AddProgressScreen';
 import FitnessPlanScreen from '../screens/FitnessPlanScreen';
 import DietChartScreen from '../screens/DietChartScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -27,12 +26,10 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
 import AdminWorkoutsScreen from '../screens/admin/AdminWorkoutsScreen';
-import AdminProgressScreen from '../screens/admin/AdminProgressScreen';
 import AdminFitnessPlansScreen from '../screens/admin/AdminFitnessPlansScreen';
 import AdminDietChartsScreen from '../screens/admin/AdminDietChartsScreen';
 import AdminEditUserScreen from '../screens/admin/AdminEditUserScreen';
 import AdminEditWorkoutScreen from '../screens/admin/AdminEditWorkoutScreen';
-import AdminEditProgressScreen from '../screens/admin/AdminEditProgressScreen';
 import AdminEditFitnessPlanScreen from '../screens/admin/AdminEditFitnessPlanScreen';
 import AdminEditDietChartScreen from '../screens/admin/AdminEditDietChartScreen';
 import AdminNotificationsScreen from '../screens/admin/AdminNotificationsScreen';
@@ -50,12 +47,8 @@ const MemberTabNavigator = () => {
 
           if (route.name === 'Dashboard') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'person' : 'person-outline';
           } else if (route.name === 'Workouts') {
             iconName = focused ? 'fitness' : 'fitness-outline';
-          } else if (route.name === 'Progress') {
-            iconName = focused ? 'trending-up' : 'trending-up-outline';
           } else if (route.name === 'Fitness Plan') {
             iconName = focused ? 'flag' : 'flag-outline';
           } else if (route.name === 'Diet Chart') {
@@ -68,7 +61,6 @@ const MemberTabNavigator = () => {
 
           const icon = <Ionicons name={iconName} size={size} color={color} />;
 
-          // Add notification badge for notifications tab
           if (route.name === 'Notifications') {
             return (
               <View style={{ position: 'relative' }}>
@@ -80,14 +72,24 @@ const MemberTabNavigator = () => {
 
           return icon;
         },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: COLORS.tabActive,
+        tabBarInactiveTintColor: COLORS.tabInactive,
+        tabBarStyle: {
+          backgroundColor: COLORS.surface,
+          borderTopColor: COLORS.borderLight,
+          paddingBottom: Platform.OS === 'web' ? 8 : undefined,
+          height: Platform.OS === 'web' ? 60 : undefined,
+          ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
+        headerShown: false,
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="Workouts" component={WorkoutsScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
       <Tab.Screen name="Fitness Plan" component={FitnessPlanScreen} />
       <Tab.Screen name="Diet Chart" component={DietChartScreen} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} />
@@ -108,26 +110,36 @@ const AdminTabNavigator = () => {
             iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Workouts') {
             iconName = focused ? 'fitness' : 'fitness-outline';
-          } else if (route.name === 'Progress') {
-            iconName = focused ? 'trending-up' : 'trending-up-outline';
           } else if (route.name === 'Fitness Plans') {
             iconName = focused ? 'flag' : 'flag-outline';
           } else if (route.name === 'Diet Charts') {
             iconName = focused ? 'restaurant' : 'restaurant-outline';
+          } else if (route.name === 'Notifications') {
+            iconName = focused ? 'notifications' : 'notifications-outline';
           } else {
             iconName = 'help-outline';
           }
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#FF6B35',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: COLORS.warning,
+        tabBarInactiveTintColor: COLORS.tabInactive,
+        tabBarStyle: {
+          backgroundColor: COLORS.surface,
+          borderTopColor: COLORS.borderLight,
+          paddingBottom: Platform.OS === 'web' ? 8 : undefined,
+          height: Platform.OS === 'web' ? 60 : undefined,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
+        headerShown: false,
       })}
     >
       <AdminTab.Screen name="Admin Dashboard" component={AdminDashboardScreen} />
       <AdminTab.Screen name="Users" component={AdminUsersScreen} />
       <AdminTab.Screen name="Workouts" component={AdminWorkoutsScreen} />
-      <AdminTab.Screen name="Progress" component={AdminProgressScreen} />
       <AdminTab.Screen name="Fitness Plans" component={AdminFitnessPlansScreen} />
       <AdminTab.Screen name="Diet Charts" component={AdminDietChartsScreen} />
       <AdminTab.Screen name="Notifications" component={AdminNotificationsScreen} />
@@ -138,6 +150,7 @@ const AdminTabNavigator = () => {
 const AppNavigator = () => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
+  const clan = authContext?.clan;
   const isLoading = authContext?.isLoading;
 
   if (isLoading) {
@@ -153,13 +166,15 @@ const AppNavigator = () => {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
           </>
-        ) : user.role === 'admin' ? (
-          // Admin screens
+        ) : !user.clanId ? (
+          // User logged in but no clan — show JoinClan
+          <Stack.Screen name="JoinClan" component={JoinClanScreen} />
+        ) : user.role === 'admin' || user.role === 'owner' ? (
+          // Admin/Owner screens
           <>
             <Stack.Screen name="AdminTabs" component={AdminTabNavigator} />
             <Stack.Screen name="AdminEditUser" component={AdminEditUserScreen} />
             <Stack.Screen name="AdminEditWorkout" component={AdminEditWorkoutScreen} />
-            <Stack.Screen name="AdminEditProgress" component={AdminEditProgressScreen} />
             <Stack.Screen name="AdminEditFitnessPlan" component={AdminEditFitnessPlanScreen} />
             <Stack.Screen name="AdminEditDietChart" component={AdminEditDietChartScreen} />
             <Stack.Screen name="AdminNotifications" component={AdminNotificationsScreen} />
@@ -169,7 +184,6 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="MemberTabs" component={MemberTabNavigator} />
             <Stack.Screen name="AddWorkout" component={AddWorkoutScreen} />
-            <Stack.Screen name="AddProgress" component={AddProgressScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -177,4 +191,4 @@ const AppNavigator = () => {
   );
 };
 
-export default AppNavigator; 
+export default AppNavigator;

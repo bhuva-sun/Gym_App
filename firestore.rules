@@ -1,9 +1,61 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow all access for testing - REMOVE THIS IN PRODUCTION
-    match /{document=**} {
-      allow read, write: if true;
+
+    // Clans collection
+    match /clans/{clanId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Members collection
+    match /members/{memberId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Auth Users collection
+    match /authUsers/{userId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Workouts collection
+    match /workouts/{workoutId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Progress Logs collection
+    match /progressLogs/{progressId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Fitness Plans collection
+    match /fitnessPlans/{planId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Diet Charts collection
+    match /dietCharts/{chartId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if true;
     }
   }
-} 
+}

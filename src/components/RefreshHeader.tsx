@@ -3,18 +3,20 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS, RADIUS, TYPOGRAPHY } from '../config/theme';
 
 interface RefreshHeaderProps {
   title: string;
   subtitle?: string;
   onRefresh?: () => void;
   showBackButton?: boolean;
-  gradientColors?: string[];
+  gradientColors?: readonly [string, string, ...string[]];
   showRefreshButton?: boolean;
 }
 
@@ -23,7 +25,7 @@ const RefreshHeader: React.FC<RefreshHeaderProps> = ({
   subtitle,
   onRefresh,
   showBackButton = false,
-  gradientColors = ['#667eea', '#764ba2'],
+  gradientColors = [COLORS.primaryGradientStart, COLORS.primaryGradientEnd],
   showRefreshButton = true,
 }) => {
   const navigation = useNavigation();
@@ -35,21 +37,21 @@ const RefreshHeader: React.FC<RefreshHeaderProps> = ({
     >
       <View style={styles.headerTop}>
         {showBackButton && (
-          <TouchableOpacity 
-            style={styles.backButton}
+          <Pressable 
+            style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
+            <Ionicons name="arrow-back" size={22} color={COLORS.textWhite} />
+          </Pressable>
         )}
         <Text style={styles.headerTitle}>{title}</Text>
         {showRefreshButton && onRefresh && (
-          <TouchableOpacity 
-            style={styles.refreshButton}
+          <Pressable 
+            style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
             onPress={onRefresh}
           >
-            <Ionicons name="refresh" size={24} color="white" />
-          </TouchableOpacity>
+            <Ionicons name="refresh" size={22} color={COLORS.textWhite} />
+          </Pressable>
         )}
       </View>
       
@@ -62,9 +64,11 @@ const RefreshHeader: React.FC<RefreshHeaderProps> = ({
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'web' ? 20 : 50,
     paddingBottom: 20,
     paddingHorizontal: 20,
+    borderBottomLeftRadius: RADIUS.xxl,
+    borderBottomRightRadius: RADIUS.xxl,
   },
   headerTop: {
     flexDirection: 'row',
@@ -72,34 +76,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 5,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  actionButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } as any : {}),
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
+    ...TYPOGRAPHY.h2,
+    color: COLORS.textWhite,
     flex: 1,
     textAlign: 'center',
   },
-  refreshButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   headerSubtitle: {
-    fontSize: 16,
+    ...TYPOGRAPHY.bodySmall,
     color: 'rgba(255, 255, 255, 0.8)',
     textAlign: 'center',
   },
+  pressed: {
+    opacity: 0.7,
+  },
 });
 
-export default RefreshHeader; 
+export default RefreshHeader;
