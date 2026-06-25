@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
+import { ENV } from '../config/environment';
+
+// Required for web redirect
+WebBrowser.maybeCompleteAuthSession();
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -23,6 +29,24 @@ const LoginScreen = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { login, loginWithGoogle } = useAuth();
+
+  // Configure Google OAuth request
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: ENV.GOOGLE.WEB_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleSignIn(id_token);
+    } else if (response?.type === 'error') {
+      setIsGoogleLoading(false);
+      Alert.alert('Error', 'Google sign-in failed. Please try again.');
+    } else if (response?.type === 'dismiss') {
+      setIsGoogleLoading(false);
+    }
+  }, [response]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -52,24 +76,35 @@ const LoginScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleSignIn = async (idToken: string) => {
     setIsGoogleLoading(true);
     try {
-      const { isNewUser } = await loginWithGoogle();
-      if (isNewUser) {
-        // New Google user — they'll need to join or create a clan
-        // The navigator will handle routing to JoinClan screen
-      }
+      await loginWithGoogle(idToken);
     } catch (error: any) {
       let errorMessage = 'Google sign-in failed';
-      if (error.message.includes('popup-closed-by-user')) {
-        errorMessage = 'Sign-in was cancelled';
-      } else if (error.message.includes('network-request-failed')) {
+      if (error.message.includes('network-request-failed')) {
         errorMessage = 'Network error. Please check your connection.';
       }
       Alert.alert('Error', errorMessage);
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleButtonPress = async () => {
+    if (!ENV.GOOGLE.WEB_CLIENT_ID) {
+      Alert.alert(
+        'Configuration Missing',
+        'Google Sign-In is not configured. Please add GOOGLE_WEB_CLIENT_ID to your .env file.'
+      );
+      return;
+    }
+    setIsGoogleLoading(true);
+    try {
+      await promptAsync();
+    } catch (error) {
+      setIsGoogleLoading(false);
+      Alert.alert('Error', 'Failed to start Google sign-in');
     }
   };
 
@@ -166,11 +201,11 @@ const LoginScreen = ({ navigation }: any) => {
             <Pressable
               style={({ pressed }) => [
                 styles.googleButton,
-                isGoogleLoading && styles.buttonDisabled,
+                (isGoogleLoading || !request) && styles.buttonDisabled,
                 pressed && !isGoogleLoading && styles.googleButtonPressed,
               ]}
-              onPress={handleGoogleLogin}
-              disabled={isGoogleLoading}
+              onPress={handleGoogleButtonPress}
+              disabled={isGoogleLoading || !request}
             >
               {isGoogleLoading ? (
                 <ActivityIndicator color={COLORS.textPrimary} size="small" />

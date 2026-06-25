@@ -16,6 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import firebaseService from '../../services/firebaseService';
 import { Member, AuthUser } from '../../types';
 import { RootStackParamList } from '../../types/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 type AdminNavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -23,17 +24,25 @@ const AdminUsersScreen = () => {
   const navigation = useNavigation<AdminNavigationProp>();
   const [members, setMembers] = useState<Member[]>([]);
   const [authUsers, setAuthUsers] = useState<AuthUser[]>([]);
+  const [clan, setClan] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { user } = useAuth();
+  
   const loadData = async () => {
+    if (!user?.clanId) return;
+
     try {
-      const [membersData, authUsersData] = await Promise.all([
-        firebaseService.getAllMembers(),
-        firebaseService.getAllAuthUsers(),
+      const clanId = user.clanId;
+      const [membersData, authUsersData, clanData] = await Promise.all([
+        firebaseService.getMembersByClan(clanId),
+        firebaseService.getAllAuthUsers(clanId),
+        firebaseService.getClan(clanId),
       ]);
       setMembers(membersData);
       setAuthUsers(authUsersData);
+      setClan(clanData);
     } catch (error) {
       console.error('Error loading users data:', error);
       Alert.alert('Error', 'Failed to load users data');
@@ -129,7 +138,7 @@ const AdminUsersScreen = () => {
         style={styles.header}
       >
         <Text style={styles.headerTitle}>Manage Users</Text>
-        <Text style={styles.headerSubtitle}>{members.length} total members</Text>
+        <Text style={styles.headerSubtitle}>{clan ? `${clan.name} • ` : ''}{members.length} total members</Text>
       </LinearGradient>
 
       <View style={styles.content}>

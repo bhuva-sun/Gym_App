@@ -16,6 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import firebaseService from '../../services/firebaseService';
 import { ProgressLog, Member } from '../../types';
 import { RootStackParamList, AdminTabParamList } from '../../types/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabParamList>;
 
@@ -26,13 +27,18 @@ const AdminProgressScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { user } = useAuth();
+
   const loadData = async () => {
+    if (!user?.clanId) return;
+
     try {
-      const [progressData, membersData] = await Promise.all([
-        firebaseService.getAllProgressLogs(),
-        firebaseService.getAllMembers(),
+      const clanId = user.clanId;
+      const [logsData, membersData] = await Promise.all([
+        firebaseService.getAllProgressLogs(clanId),
+        firebaseService.getMembersByClan(clanId),
       ]);
-      setProgressLogs(progressData);
+      setProgressLogs(logsData);
       setMembers(membersData);
     } catch (error) {
       console.error('Error loading progress data:', error);

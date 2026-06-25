@@ -11,6 +11,7 @@ import {
   TextInput,
   ScrollView,
   Switch,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,7 +76,7 @@ const AdminNotificationsScreen = () => {
   const sendRenewalNotifications = async () => {
     setSendingNotifications(true);
     try {
-      await notificationService.checkAllMembersForRenewal();
+      await notificationService.checkAllMembersForRenewal(clan?.id || '');
       Alert.alert('Success', 'Renewal notifications sent successfully!');
       await loadData();
     } catch (error) {
@@ -164,22 +165,31 @@ const AdminNotificationsScreen = () => {
   };
 
   const deleteNotification = async (notificationId: string) => {
-    Alert.alert('Delete Notification', 'Are you sure you want to delete this notification?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await firebaseService.deleteNotification(notificationId);
-            setNotifications(prev => prev.filter(n => n.id !== notificationId));
-          } catch (error) {
-            console.error('Error deleting notification:', error);
-            Alert.alert('Error', 'Failed to delete notification');
-          }
-        },
-      },
-    ]);
+    const doDelete = async () => {
+      try {
+        await firebaseService.deleteNotification(notificationId);
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+        if (Platform.OS === 'web') {
+          window.alert('Failed to delete notification');
+        } else {
+          Alert.alert('Error', 'Failed to delete notification');
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to delete this notification?');
+      if (confirmed) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Notification', 'Are you sure you want to delete this notification?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
   };
 
   const getNotificationIcon = (type: string) => {

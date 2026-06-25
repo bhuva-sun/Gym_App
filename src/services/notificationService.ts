@@ -237,14 +237,12 @@ class NotificationService {
   }
 
   // Check all members for renewal notifications
-  async checkAllMembersForRenewal(): Promise<void> {
+  async checkAllMembersForRenewal(clanId: string): Promise<void> {
     try {
-      const members = await firebaseService.getAllMembers();
+      const members = await firebaseService.getMembersNeedingRenewal(30, clanId);
       
       for (const member of members) {
-        if (member.membershipStatus === 'active') {
-          await this.sendMembershipRenewalNotification(member);
-        }
+        await this.sendMembershipRenewalNotification(member);
       }
     } catch (error) {
       console.error('Error checking members for renewal:', error);

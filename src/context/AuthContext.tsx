@@ -10,7 +10,7 @@ interface AuthContextType {
   clan: Clan | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: () => Promise<{ isNewUser: boolean }>;
+  loginWithGoogle: (idToken: string) => Promise<{ isNewUser: boolean }>;
   logout: () => void;
   register: (email: string, password: string, memberData: Omit<Member, 'id'>) => Promise<boolean>;
   createClan: (name: string) => Promise<Clan>;
@@ -39,19 +39,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize sample data with error handling
-    const initializeApp = async () => {
-      try {
-        await firebaseService.initializeSampleData();
-        console.log('Sample data initialized successfully');
-      } catch (error: any) {
-        console.warn('Firebase permission error - please update Firestore rules:', error.message);
-        // Continue without sample data for now
-      }
-    };
-
-    initializeApp();
-
     // Listen to Firebase auth state changes
     const unsubscribe = authService.onAuthStateChange(async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
@@ -59,7 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (firebaseUser) {
         try {
           // Get auth user data from Firestore
-          const authUserData = await authService.getAuthUserData(firebaseUser.email!);
+          const authUserData = await authService.getAuthUserData(firebaseUser.uid);
           if (authUserData) {
             setUser(authUserData);
             // Load clan data if user has a clanId
@@ -71,9 +58,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 console.warn('Error loading clan:', e);
               }
             }
+          } else {
+            // No authUser doc in Firestore — set a minimal user so the
+            // navigator shows the JoinClan screen instead of Login.
+            setUser({
+              id: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              role: 'member',
+              clanId: '',
+              isActive: true,
+              createdAt: new Date().toISOString(),
+            });
           }
         } catch (error) {
-          console.warn('Error getting auth user data:', error);
+          console.warn('Error getting auth user data, creating minimal user:', error);
+          // Even on error, set a minimal user so the app doesn't loop on Login
+          setUser({
+            id: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            role: 'member',
+            clanId: '',
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          });
         }
       } else {
         setUser(null);
@@ -87,8 +94,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const refreshUser = async () => {
-    if (firebaseUser?.email) {
-      const authUserData = await authService.getAuthUserData(firebaseUser.email);
+    if (firebaseUser?.uid) {
+      const authUserData = await authService.getAuthUserData(firebaseUser.uid);
       if (authUserData) {
         setUser(authUserData);
         if (authUserData.clanId) {
@@ -109,9 +116,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const loginWithGoogle = async (): Promise<{ isNewUser: boolean }> => {
+  const loginWithGoogle = async (idToken: string): Promise<{ isNewUser: boolean }> => {
     try {
-      const { isNewUser } = await authService.signInWithGoogle();
+      const { isNewUser } = await authService.signInWithGoogle(idToken);
       return { isNewUser };
     } catch (error: any) {
       console.error('Google login error:', error);
@@ -129,11 +136,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (email: string, password: string, memberData: Omit<Member, 'id'>): Promise<boolean> => {
     try {
-      // Create member in Firestore first
-      const newMember = await firebaseService.createMember(memberData);
-
-      // Create Firebase auth user and auth user record
-      await authService.signUp(email, password, newMember);
+      // Create Firebase auth user, auth user record, and member in Firestore
+      await authService.signUp(email, password, memberData);
       return true;
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -154,10 +158,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         updatedAt: new Date().toISOString(),
       });
 
-      // Update the user's authUser record with clanId and owner role
-      if (user?.id) {
-        await firebaseService.updateAuthUser(user.id, { clanId: newClan.id, role: 'owner' });
-      }
+      // Create or update the user's authUser record with clanId and owner role.
+      // Use createAuthUser (setDoc) to handle the case where the document
+      // doesn't exist yet (e.g. user registered but doc wasn't created).
+      await firebaseService.createAuthUser(firebaseUser.uid, {
+        email: firebaseUser.email,
+        clanId: newClan.id,
+        role: 'owner',
+        isActive: true,
+        createdAt: user?.createdAt || new Date().toISOString(),
+      });
 
       setClan(newClan);
       await refreshUser();
@@ -169,18 +179,81 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const joinClan = async (inviteCode: string): Promise<Clan> => {
+    if (!firebaseUser?.uid) throw new Error('Must be logged in to join a clan');
     try {
-      const foundClan = await firebaseService.getClanByInviteCode(inviteCode);
-      if (!foundClan) throw new Error('Invalid invite code');
-
-      // Update the user's authUser record with clanId
-      if (user?.id) {
-        await firebaseService.updateAuthUser(user.id, { clanId: foundClan.id });
+      const clanData = await firebaseService.getClanByInviteCode(inviteCode);
+      if (!clanData) {
+        throw new Error('Invalid invite code. No clan found.');
       }
 
-      setClan(foundClan);
+      if (user?.clanId) {
+        throw new Error('You are already a member of a clan.');
+      }
+
+      // Check if the user document is the dummy fallback or a real one
+      const existingUser = await firebaseService.getAuthUserById(firebaseUser.uid);
+
+      // Ensure the user has a Member document.
+      // Google sign-in users skip Registration and won't have one.
+      let memberId = existingUser?.memberId || user?.memberId;
+
+      if (memberId) {
+        // Member doc exists — update its clanId
+        try {
+          await firebaseService.updateMember(memberId, {
+            clanId: clanData.id,
+          });
+        } catch (e) {
+          console.warn('Could not update member document clanId directly. Rules may block this.', e);
+        }
+      } else {
+        // No Member doc — create one from the Firebase profile
+        const displayName = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Member';
+        const now = new Date();
+        const newMember = await firebaseService.createMember({
+          name: displayName,
+          gender: 'other',
+          height: 0,
+          weight: 0,
+          email: firebaseUser.email || '',
+          phone: '',
+          address: '',
+          clanId: clanData.id,
+          membershipStatus: 'active',
+          membershipFee: 0,
+          membershipFeeStatus: 'pending',
+          membershipStartDate: now,
+          membershipEndDate: new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+          lastPaymentDate: now.toISOString(),
+          nextPaymentDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+          emergencyContact: { name: '', phone: '', relationship: '' },
+        });
+        memberId = newMember.id;
+      }
+
+      // Update (or create) the authUser doc with the clanId, role, and memberId
+      if (existingUser) {
+        await firebaseService.updateAuthUser(firebaseUser.uid, {
+          clanId: clanData.id,
+          role: 'member',
+          memberId: memberId,
+        });
+      } else {
+        await firebaseService.createAuthUser(firebaseUser.uid, {
+          email: firebaseUser.email || '',
+          clanId: clanData.id,
+          role: 'member',
+          memberId: memberId,
+          isActive: true,
+          createdAt: user?.createdAt || new Date().toISOString(),
+        });
+      }
+
+      setClan(clanData);
       await refreshUser();
-      return foundClan;
+      return clanData;
     } catch (error: any) {
       console.error('Error joining clan:', error);
       throw error;

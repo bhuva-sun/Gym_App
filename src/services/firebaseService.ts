@@ -11,9 +11,11 @@ import {
   orderBy,
   limit,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  setDoc
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../config/firebase';
 import {
   Member,
   Workout,
@@ -140,6 +142,12 @@ export const updateClan = async (id: string, updates: Partial<Clan>): Promise<vo
     console.error('Error updating clan:', error);
     throw error;
   }
+};
+
+export const joinClanViaFunction = async (inviteCode: string): Promise<Clan> => {
+  const callable = httpsCallable<{ inviteCode: string }, Clan>(functions, 'joinClan');
+  const result = await callable({ inviteCode });
+  return result.data;
 };
 
 // ========== Member Operations ==========
@@ -528,35 +536,31 @@ export const deleteDietChart = async (dietId: string): Promise<void> => {
 
 // ========== Auth User Operations ==========
 
-export const createAuthUser = async (authData: Omit<AuthUser, 'id'>): Promise<AuthUser> => {
+export const createAuthUser = async (uid: string, authData: Omit<AuthUser, 'id'>): Promise<AuthUser> => {
   try {
-    const docRef = await addDoc(collection(db, 'authUsers'), {
+    const docRef = doc(db, 'authUsers', uid);
+    await setDoc(docRef, {
       ...prepareDataForFirestore(authData),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
-    return { id: docRef.id, ...authData };
+    return { id: uid, ...authData };
   } catch (error) {
     console.error('Error creating auth user:', error);
     throw error;
   }
 };
 
-export const getAuthUserByEmail = async (email: string): Promise<AuthUser | null> => {
+export const getAuthUserById = async (uid: string): Promise<AuthUser | null> => {
   try {
-    const q = query(
-      collection(db, 'authUsers'),
-      where('email', '==', email),
-      limit(1)
-    );
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-      const docSnap = querySnapshot.docs[0];
+    const docRef = doc(db, 'authUsers', uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
       return { id: docSnap.id, ...convertFromFirestore(docSnap.data()) } as AuthUser;
     }
     return null;
   } catch (error) {
-    console.error('Error getting auth user by email:', error);
+    console.error('Error getting auth user data:', error);
     throw error;
   }
 };
@@ -662,9 +666,10 @@ export const deleteNotification = async (id: string): Promise<void> => {
 
 // ========== Admin/Bulk Query Operations ==========
 
-export const getAllAuthUsers = async (): Promise<AuthUser[]> => {
+export const getAllAuthUsers = async (clanId: string): Promise<AuthUser[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'authUsers'));
+    const q = query(collection(db, 'authUsers'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
@@ -675,9 +680,10 @@ export const getAllAuthUsers = async (): Promise<AuthUser[]> => {
   }
 };
 
-export const getAllWorkouts = async (): Promise<Workout[]> => {
+export const getAllWorkouts = async (clanId: string): Promise<Workout[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'workouts'));
+    const q = query(collection(db, 'workouts'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
@@ -688,9 +694,10 @@ export const getAllWorkouts = async (): Promise<Workout[]> => {
   }
 };
 
-export const getAllProgressLogs = async (): Promise<ProgressLog[]> => {
+export const getAllProgressLogs = async (clanId: string): Promise<ProgressLog[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'progressLogs'));
+    const q = query(collection(db, 'progressLogs'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
@@ -701,9 +708,10 @@ export const getAllProgressLogs = async (): Promise<ProgressLog[]> => {
   }
 };
 
-export const getAllFitnessPlans = async (): Promise<FitnessPlan[]> => {
+export const getAllFitnessPlans = async (clanId: string): Promise<FitnessPlan[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'fitnessPlans'));
+    const q = query(collection(db, 'fitnessPlans'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
@@ -714,9 +722,10 @@ export const getAllFitnessPlans = async (): Promise<FitnessPlan[]> => {
   }
 };
 
-export const getAllDietCharts = async (): Promise<DietChart[]> => {
+export const getAllDietCharts = async (clanId: string): Promise<DietChart[]> => {
   try {
-    const querySnapshot = await getDocs(collection(db, 'dietCharts'));
+    const q = query(collection(db, 'dietCharts'), where('clanId', '==', clanId));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...convertFromFirestore(doc.data())
@@ -734,7 +743,8 @@ export const getMembersNeedingRenewal = async (daysThreshold: number = 30, clanI
     const thresholdDate = new Date(today.getTime() + (daysThreshold * 24 * 60 * 60 * 1000));
     return members.filter(member => {
       const endDate = new Date(member.membershipEndDate);
-      return member.membershipStatus === 'active' && endDate <= thresholdDate;
+      const isStatusEligible = member.membershipStatus === 'active' || member.membershipStatus === 'expired';
+      return isStatusEligible && endDate <= thresholdDate;
     });
   } catch (error) {
     console.error('Error getting members needing renewal:', error);
@@ -817,7 +827,7 @@ export const initializeSampleData = async (): Promise<void> => {
     });
 
     // Create sample auth users
-    await createAuthUser({
+    await createAuthUser('sample_user_1', {
       email: 'john@example.com',
       memberId: member1.id,
       clanId: defaultClan.id,
@@ -826,7 +836,7 @@ export const initializeSampleData = async (): Promise<void> => {
       createdAt: new Date().toISOString()
     });
 
-    await createAuthUser({
+    await createAuthUser('sample_user_2', {
       email: 'jane@example.com',
       memberId: member2.id,
       clanId: defaultClan.id,
@@ -836,7 +846,7 @@ export const initializeSampleData = async (): Promise<void> => {
     });
 
     // Create admin/owner user
-    await createAuthUser({
+    await createAuthUser('admin_user_id', {
       email: ADMIN_EMAIL,
       role: 'owner',
       clanId: defaultClan.id,
@@ -914,6 +924,7 @@ export default {
   getClanByInviteCode,
   updateClan,
   generateInviteCode,
+  joinClanViaFunction,
   // Member
   createMember,
   getMember,
@@ -948,7 +959,7 @@ export default {
   deleteDietChart,
   // Auth User
   createAuthUser,
-  getAuthUserByEmail,
+  getAuthUserById,
   updateAuthUser,
   deleteAuthUser,
   // Notifications

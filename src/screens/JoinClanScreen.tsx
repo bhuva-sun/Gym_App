@@ -22,38 +22,44 @@ const JoinClanScreen = () => {
   const [clanName, setClanName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error' | ''>('');
 
   const handleCreateClan = async () => {
+    setMessage('');
     if (!clanName.trim()) {
-      Alert.alert('Error', 'Please enter a gym/clan name');
+      setMessageType('error');
+      setMessage('Please enter a gym/clan name');
       return;
     }
     setIsLoading(true);
     try {
       const newClan = await createClan(clanName.trim());
-      Alert.alert(
-        'Clan Created! 🎉',
-        `Your invite code is: ${newClan.inviteCode}\n\nShare this code with your gym members so they can join.`,
-        [{ text: 'Got it!' }]
-      );
+      setMessageType('success');
+      setMessage(`Clan Created! 🎉\n\nYour invite code is: ${newClan.inviteCode}\n\nShare this code with your gym members so they can join.`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create clan');
+      setMessageType('error');
+      setMessage(error.message || 'Failed to create clan');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleJoinClan = async () => {
+    setMessage('');
     if (inviteCode.length !== 6) {
-      Alert.alert('Error', 'Please enter a valid 6-character invite code');
+      setMessageType('error');
+      setMessage('Please enter a valid 6-character invite code');
       return;
     }
     setIsLoading(true);
     try {
       const clan = await joinClan(inviteCode.toUpperCase());
-      Alert.alert('Welcome! 🎉', `You've joined ${clan.name}`);
+      setMessageType('success');
+      setMessage(`Welcome! 🎉 You've joined ${clan.name}`);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Invalid invite code');
+      setMessageType('error');
+      setMessage(error.message || 'Invalid invite code');
     } finally {
       setIsLoading(false);
     }
@@ -155,6 +161,14 @@ const JoinClanScreen = () => {
       </View>
       <Text style={styles.formTitle}>Join a Clan</Text>
       <Text style={styles.formSubtitle}>Enter the 6-character invite code shared by your gym owner.</Text>
+
+      {message ? (
+        <View style={[styles.messageBox, messageType === 'success' ? styles.messageSuccess : styles.messageError]}>
+          <Text style={[styles.messageText, messageType === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>
+            {message}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.codeContainer}>
         <TextInput
@@ -260,6 +274,33 @@ const styles = StyleSheet.create({
   formSubtitle: {
     ...TYPOGRAPHY.bodySmall, color: COLORS.textSecondary, textAlign: 'center',
     marginBottom: 24, lineHeight: 20,
+  },
+  messageBox: {
+    padding: 12,
+    borderRadius: RADIUS.md,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  messageSuccess: {
+    backgroundColor: COLORS.successLight,
+    borderColor: COLORS.success,
+    borderWidth: 1,
+  },
+  messageError: {
+    backgroundColor: COLORS.dangerLight,
+    borderColor: COLORS.danger,
+    borderWidth: 1,
+  },
+  messageText: {
+    ...TYPOGRAPHY.bodySmall,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  messageTextSuccess: {
+    color: COLORS.success,
+  },
+  messageTextError: {
+    color: COLORS.danger,
   },
   inputContainer: {
     flexDirection: 'row', alignItems: 'center', borderWidth: 1.5,

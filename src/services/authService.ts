@@ -1,16 +1,17 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithCredential,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   User as FirebaseUser,
   updateProfile,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { auth, googleProvider } from '../config/firebase';
-import { createAuthUser, getAuthUserByEmail } from './firebaseService';
-import { AuthUser } from '../types';
+import { auth } from '../config/firebase';
+import { createAuthUser, getAuthUserById, createMember } from './firebaseService';
+import { AuthUser, Member } from '../types';
 
 // Admin email constant
 export const ADMIN_EMAIL = 'bhvanmadhur@gmail.com';
@@ -19,7 +20,7 @@ export const ADMIN_EMAIL = 'bhvanmadhur@gmail.com';
 export const signUp = async (
   email: string,
   password: string,
-  memberData: any
+  memberData: Omit<Member, 'id'>
 ): Promise<FirebaseUser> => {
   try {
     // Create user in Firebase Auth
@@ -31,10 +32,13 @@ export const signUp = async (
       displayName: memberData.name
     });
 
+    // Create member in Firestore now that auth is established
+    const newMember = await createMember(memberData);
+
     // Create auth user record in Firestore
-    await createAuthUser({
+    await createAuthUser(user.uid, {
       email: email,
-      memberId: memberData.id,
+      memberId: newMember.id,
       clanId: memberData.clanId || '',
       role: email === ADMIN_EMAIL ? 'owner' : 'member',
       isActive: true,
@@ -59,23 +63,38 @@ export const signIn = async (email: string, password: string): Promise<FirebaseU
   }
 };
 
-// Sign in with Google
-export const signInWithGoogle = async (): Promise<{ user: FirebaseUser; isNewUser: boolean }> => {
+// Sign in with Google using an ID token from expo-auth-session OAuth flow
+export const signInWithGoogle = async (idToken: string): Promise<{ user: FirebaseUser; isNewUser: boolean }> => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
-    const user = result.user;
+    // Create Firebase credential from the Google ID token
+    const credential = GoogleAuthProvider.credential(idToken);
+    const userCredential = await signInWithCredential(auth, credential);
+    const user = userCredential.user;
 
-    // Check if auth user record exists
-    const existingAuthUser = await getAuthUserByEmail(user.email!);
-    const isNewUser = !existingAuthUser;
-
-    if (isNewUser) {
-      // Create a basic auth user record — clan join will happen later
-      await createAuthUser({
-        email: user.email!,
+    // Check if authUsers doc already exists
+    let isNewUser = false;
+    try {
+      const existingAuthUser = await getAuthUserById(user.uid);
+      if (!existingAuthUser) {
+        isNewUser = true;
+        // Create authUser doc for new Google users (no clan yet)
+        await createAuthUser(user.uid, {
+          email: user.email || '',
+          clanId: '',
+          role: user.email === ADMIN_EMAIL ? 'owner' : 'member',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch {
+      // If getAuthUserById fails (permissions etc.), treat as new user
+      isNewUser = true;
+      await createAuthUser(user.uid, {
+        email: user.email || '',
+        clanId: '',
         role: user.email === ADMIN_EMAIL ? 'owner' : 'member',
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       });
     }
 
@@ -107,9 +126,9 @@ export const onAuthStateChange = (callback: (user: FirebaseUser | null) => void)
 };
 
 // Get auth user data from Firestore
-export const getAuthUserData = async (email: string): Promise<AuthUser | null> => {
+export const getAuthUserData = async (uid: string): Promise<AuthUser | null> => {
   try {
-    return await getAuthUserByEmail(email);
+    return await getAuthUserById(uid);
   } catch (error) {
     console.error('Error getting auth user data:', error);
     return null;

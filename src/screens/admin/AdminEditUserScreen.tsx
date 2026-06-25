@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import firebaseService from '../../services/firebaseService';
 import { Member, AuthUser } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
 const AdminEditUserScreen = () => {
   const navigation = useNavigation();
@@ -37,15 +38,28 @@ const AdminEditUserScreen = () => {
     membershipStatus: '',
     membershipFee: '',
     membershipFeeStatus: '',
+    membershipStartDate: '',
+    membershipEndDate: '',
+    nextPaymentDate: '',
   });
 
+  const toDateString = (date: any) => {
+    if (!date) return '';
+    try { return new Date(date).toISOString().split('T')[0]; } 
+    catch (e) { return ''; }
+  };
+
   const [isActive, setIsActive] = useState(true);
+
+  const { user } = useAuth();
 
   useEffect(() => {
     loadUserData();
   }, [userId]);
 
   const loadUserData = async () => {
+    if (!user?.clanId) return;
+
     try {
       setLoading(true);
       const memberData = await firebaseService.getMember(userId);
@@ -62,12 +76,15 @@ const AdminEditUserScreen = () => {
           membershipStatus: memberData.membershipStatus,
           membershipFee: memberData.membershipFee.toString(),
           membershipFeeStatus: memberData.membershipFeeStatus,
+          membershipStartDate: toDateString(memberData.membershipStartDate),
+          membershipEndDate: toDateString(memberData.membershipEndDate),
+          nextPaymentDate: toDateString(memberData.nextPaymentDate),
         });
       }
 
       // Get auth user data
-      const authUsers = await firebaseService.getAllAuthUsers();
-      const userAuth = authUsers.find(user => user.memberId === userId);
+      const authUsers = await firebaseService.getAllAuthUsers(user.clanId);
+      const userAuth = authUsers.find(u => u.memberId === userId);
       if (userAuth) {
         setAuthUser(userAuth);
         setIsActive(userAuth.isActive);
@@ -105,6 +122,14 @@ const AdminEditUserScreen = () => {
         membershipFee: parseFloat(formData.membershipFee) || 600,
         membershipFeeStatus: formData.membershipFeeStatus as 'paid' | 'pending' | 'overdue',
       };
+
+      try {
+        if (formData.membershipStartDate) updatedMember.membershipStartDate = new Date(formData.membershipStartDate).toISOString() as any;
+        if (formData.membershipEndDate) updatedMember.membershipEndDate = new Date(formData.membershipEndDate).toISOString() as any;
+        if (formData.nextPaymentDate) updatedMember.nextPaymentDate = new Date(formData.nextPaymentDate).toISOString() as any;
+      } catch (e) {
+        console.error('Invalid date format provided');
+      }
 
       await firebaseService.updateMember(userId, updatedMember);
 
@@ -357,6 +382,38 @@ const AdminEditUserScreen = () => {
                   </TouchableOpacity>
                 ))}
               </View>
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Start Date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.membershipStartDate}
+              onChangeText={(text) => setFormData({ ...formData, membershipStartDate: text })}
+              placeholder="e.g. 2026-06-25"
+            />
+          </View>
+
+          <View style={styles.row}>
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.label}>Expiry Date (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.membershipEndDate}
+                onChangeText={(text) => setFormData({ ...formData, membershipEndDate: text })}
+                placeholder="e.g. 2027-06-25"
+              />
+            </View>
+
+            <View style={[styles.inputGroup, styles.halfWidth]}>
+              <Text style={styles.label}>Next Payment (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.nextPaymentDate}
+                onChangeText={(text) => setFormData({ ...formData, nextPaymentDate: text })}
+                placeholder="e.g. 2026-07-25"
+              />
             </View>
           </View>
         </View>

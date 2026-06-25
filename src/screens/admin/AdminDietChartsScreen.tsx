@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, AdminTabParamList } from '../../types/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabParamList>;
 import firebaseService from '../../services/firebaseService';
@@ -26,11 +27,16 @@ const AdminDietChartsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { user } = useAuth();
+
   const loadData = async () => {
+    if (!user?.clanId) return;
+
     try {
+      const clanId = user.clanId;
       const [chartsData, membersData] = await Promise.all([
-        firebaseService.getAllDietCharts(),
-        firebaseService.getAllMembers(),
+        firebaseService.getAllDietCharts(clanId),
+        firebaseService.getMembersByClan(clanId),
       ]);
       setDietCharts(chartsData);
       setMembers(membersData);

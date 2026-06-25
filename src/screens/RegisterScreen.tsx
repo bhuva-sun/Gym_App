@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, RADIUS, SHADOWS, TYPOGRAPHY } from '../config/theme';
+import { ENV } from '../config/environment';
+
+// Required for web redirect
+WebBrowser.maybeCompleteAuthSession();
 
 const RegisterScreen = ({ navigation }: any) => {
   const [formData, setFormData] = useState({
@@ -33,6 +39,24 @@ const RegisterScreen = ({ navigation }: any) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { register, loginWithGoogle } = useAuth();
+
+  // Configure Google OAuth request
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    clientId: ENV.GOOGLE.WEB_CLIENT_ID,
+  });
+
+  // Handle Google OAuth response
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const { id_token } = response.params;
+      handleGoogleSignIn(id_token);
+    } else if (response?.type === 'error') {
+      setIsGoogleLoading(false);
+      Alert.alert('Error', 'Google sign-up failed. Please try again.');
+    } else if (response?.type === 'dismiss') {
+      setIsGoogleLoading(false);
+    }
+  }, [response]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -82,10 +106,16 @@ const RegisterScreen = ({ navigation }: any) => {
       };
 
       await register(formData.email, formData.password, memberData);
-      Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('Login') }
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('Account created successfully!');
+        navigation.navigate('Login');
+      } else {
+        Alert.alert('Success', 'Account created successfully!', [
+          { text: 'OK', onPress: () => navigation.navigate('Login') }
+        ]);
+      }
     } catch (error: any) {
+      console.error('Registration Error:', error);
       let errorMessage = 'An error occurred during registration';
       if (error.message.includes('email-already-in-use')) {
         errorMessage = 'An account with this email already exists';
@@ -94,24 +124,46 @@ const RegisterScreen = ({ navigation }: any) => {
       } else if (error.message.includes('weak-password')) {
         errorMessage = 'Password is too weak';
       }
-      Alert.alert('Error', errorMessage);
+      
+      if (Platform.OS === 'web') {
+        window.alert(errorMessage);
+      } else {
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignIn = async (idToken: string) => {
     setIsGoogleLoading(true);
     try {
-      await loginWithGoogle();
+      await loginWithGoogle(idToken);
     } catch (error: any) {
       let errorMessage = 'Google sign-up failed';
-      if (error.message.includes('popup-closed-by-user')) {
-        errorMessage = 'Sign-up was cancelled';
+      if (error.message.includes('network-request-failed')) {
+        errorMessage = 'Network error. Please check your connection.';
       }
       Alert.alert('Error', errorMessage);
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleButtonPress = async () => {
+    if (!ENV.GOOGLE.WEB_CLIENT_ID) {
+      Alert.alert(
+        'Configuration Missing',
+        'Google Sign-In is not configured. Please add GOOGLE_WEB_CLIENT_ID to your .env file.'
+      );
+      return;
+    }
+    setIsGoogleLoading(true);
+    try {
+      await promptAsync();
+    } catch (error) {
+      setIsGoogleLoading(false);
+      Alert.alert('Error', 'Failed to start Google sign-up');
     }
   };
 
@@ -147,11 +199,11 @@ const RegisterScreen = ({ navigation }: any) => {
             <Pressable
               style={({ pressed }) => [
                 styles.googleButton,
-                isGoogleLoading && styles.buttonDisabled,
+                (isGoogleLoading || !request) && styles.buttonDisabled,
                 pressed && !isGoogleLoading && styles.googleButtonPressed,
               ]}
-              onPress={handleGoogleSignUp}
-              disabled={isGoogleLoading}
+              onPress={handleGoogleButtonPress}
+              disabled={isGoogleLoading || !request}
             >
               {isGoogleLoading ? (
                 <ActivityIndicator color={COLORS.textPrimary} size="small" />

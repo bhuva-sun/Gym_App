@@ -24,9 +24,9 @@ const NotificationsScreen = () => {
   useEffect(() => { loadNotifications(); }, []);
 
   const loadNotifications = async () => {
-    if (!user?.id) { setIsLoading(false); return; }
+    if (!user?.memberId) { setIsLoading(false); return; }
     try {
-      const data = await firebaseService.getNotificationsByUser(user.id);
+      const data = await firebaseService.getNotificationsByUser(user.memberId);
       setNotifications(data);
     } catch (error) {
       console.error('Error loading notifications:', error);

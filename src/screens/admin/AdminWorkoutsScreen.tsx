@@ -16,6 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import firebaseService from '../../services/firebaseService';
 import { Workout, Member } from '../../types';
 import { RootStackParamList } from '../../types/navigation';
+import { useAuth } from '../../context/AuthContext';
 
 type AdminNavigationProp = StackNavigationProp<RootStackParamList>;
 
@@ -26,11 +27,16 @@ const AdminWorkoutsScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { user } = useAuth();
+  
   const loadData = async () => {
+    if (!user?.clanId) return;
+
     try {
+      const clanId = user.clanId;
       const [workoutsData, membersData] = await Promise.all([
-        firebaseService.getAllWorkouts(),
-        firebaseService.getAllMembers(),
+        firebaseService.getAllWorkouts(clanId),
+        firebaseService.getMembersByClan(clanId),
       ]);
       setWorkouts(workoutsData);
       setMembers(membersData);

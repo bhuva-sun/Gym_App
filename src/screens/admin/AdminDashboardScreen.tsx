@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +23,7 @@ type AdminNavigationProp = StackNavigationProp<RootStackParamList & AdminTabPara
 
 const AdminDashboardScreen = () => {
   const navigation = useNavigation<AdminNavigationProp>();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const [stats, setStats] = useState({
     totalMembers: 0,
     totalWorkouts: 0,
@@ -32,17 +33,23 @@ const AdminDashboardScreen = () => {
   });
   const [recentMembers, setRecentMembers] = useState<Member[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [clan, setClan] = useState<any>(null);
 
   const loadData = async () => {
+    if (!user?.clanId) return;
+    
     try {
-      const [members, workouts, progressLogs, fitnessPlans, dietCharts] = await Promise.all([
-        firebaseService.getAllMembers(),
-        firebaseService.getAllWorkouts(),
-        firebaseService.getAllProgressLogs(),
-        firebaseService.getAllFitnessPlans(),
-        firebaseService.getAllDietCharts(),
+      const clanId = user.clanId;
+      const [members, workouts, progressLogs, fitnessPlans, dietCharts, clanData] = await Promise.all([
+        firebaseService.getMembersByClan(clanId),
+        firebaseService.getAllWorkouts(clanId),
+        firebaseService.getAllProgressLogs(clanId),
+        firebaseService.getAllFitnessPlans(clanId),
+        firebaseService.getAllDietCharts(clanId),
+        firebaseService.getClan(clanId),
       ]);
+
+      setClan(clanData);
 
       setStats({
         totalMembers: members.length,
@@ -74,19 +81,26 @@ const AdminDashboardScreen = () => {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', onPress: logout, style: 'destructive' },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      const confirmLogout = window.confirm('Are you sure you want to logout?');
+      if (confirmLogout) {
+        logout();
+      }
+    } else {
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Logout', onPress: logout, style: 'destructive' },
+        ]
+      );
+    }
   };
 
   const StatCard = ({ title, value, icon, color, onPress }: {
     title: string;
-    value: number;
+    value: number | string;
     icon: keyof typeof Ionicons.glyphMap;
     color: string;
     onPress?: () => void;
@@ -136,7 +150,9 @@ const AdminDashboardScreen = () => {
           <View style={styles.headerContent}>
             <View style={styles.headerInfo}>
               <Text style={styles.headerTitle}>Admin Dashboard</Text>
-              <Text style={styles.headerSubtitle}>Manage your gym operations</Text>
+              <Text style={styles.headerSubtitle}>
+                {clan ? `Manage your gym operations • ${clan.name}` : 'Manage your gym operations'}
+              </Text>
             </View>
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Ionicons name="log-out-outline" size={24} color="white" />
@@ -178,11 +194,10 @@ const AdminDashboardScreen = () => {
               onPress={() => navigation.navigate('Diet Charts')}
             />
             <StatCard
-              title="QR Code"
-              value={0}
-              icon="qr-code"
+              title="Invite Code"
+              value={clan?.inviteCode || '...'}
+              icon="key"
               color="#5856D6"
-              onPress={() => setQrModalVisible(true)}
             />
           </View>
 
@@ -215,10 +230,10 @@ const AdminDashboardScreen = () => {
               onPress={() => navigation.navigate('Diet Charts')}
             />
             <QuickActionCard
-              title="Show QR Code"
-              description="Display QR code for app access"
-              icon="qr-code"
-              onPress={() => setQrModalVisible(true)}
+              title="Invite Code"
+              description="Share this code with members to join"
+              icon="key"
+              onPress={() => Alert.alert("Invite Code", `Your clan invite code is:\n\n${clan?.inviteCode}\n\nShare this code with your members.`)}
             />
             <QuickActionCard
               title="Manage Notifications"
@@ -254,13 +269,6 @@ const AdminDashboardScreen = () => {
         </View>
       </ScrollView>
 
-      {/* QR Code Modal */}
-      <QRModal
-        visible={qrModalVisible}
-        onClose={() => setQrModalVisible(false)}
-        title="TheGymEye QR Code"
-        qrImageUrl="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://thegymeye.com/admin&bgcolor=FFFFFF&color=000000"
-      />
     </>
   );
 };

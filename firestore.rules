@@ -2,60 +2,112 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Clans collection
+    function getUserData(uid) {
+      return get(/databases/$(database)/documents/authUsers/$(uid)).data;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSameClan(clanId) {
+      return isAuthenticated() && (getUserData(request.auth.uid).clanId == clanId || clanId == '');
+    }
+
+    function getUserRole() {
+      return getUserData(request.auth.uid).role;
+    }
+
+    function isOwner(clanId) {
+      return isSameClan(clanId) && getUserRole() == 'owner';
+    }
+
+    function isAdmin(clanId) {
+      return isSameClan(clanId) && getUserRole() == 'admin';
+    }
+
+    function isTrainer(clanId) {
+      return isSameClan(clanId) && getUserRole() == 'trainer';
+    }
+
+    function isOwnerOrAdmin(clanId) {
+      return isOwner(clanId) || isAdmin(clanId);
+    }
+
+    function isOwnerAdminOrTrainer(clanId) {
+      return isOwnerOrAdmin(clanId) || isTrainer(clanId);
+    }
+
     match /clans/{clanId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isOwner(clanId);
+      allow delete: if isOwner(clanId);
     }
 
-    // Members collection
-    match /members/{memberId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
-    }
-
-    // Auth Users collection
     match /authUsers/{userId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isOwnerOrAdmin(resource.data.clanId);
     }
 
-    // Workouts collection
+    match /members/{memberId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isOwnerOrAdmin(resource.data.clanId);
+    }
+
     match /workouts/{workoutId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (
+        (isSameClan(resource.data.clanId) && getUserData(request.auth.uid).memberId == resource.data.memberId) ||
+        isOwnerOrAdmin(resource.data.clanId)
+      );
     }
 
-    // Progress Logs collection
-    match /progressLogs/{progressId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
-    }
-
-    // Fitness Plans collection
     match /fitnessPlans/{planId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (
+        (isSameClan(resource.data.clanId) && getUserData(request.auth.uid).memberId == resource.data.memberId) ||
+        isOwnerOrAdmin(resource.data.clanId)
+      );
     }
 
-    // Diet Charts collection
+    match /progressLogs/{progressId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (
+        (isSameClan(resource.data.clanId) && getUserData(request.auth.uid).memberId == resource.data.memberId) ||
+        isOwnerOrAdmin(resource.data.clanId)
+      );
+    }
+
     match /dietCharts/{chartId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (
+        (isSameClan(resource.data.clanId) && getUserData(request.auth.uid).memberId == resource.data.memberId) ||
+        isOwnerOrAdmin(resource.data.clanId)
+      );
     }
 
-    // Notifications collection
     match /notifications/{notificationId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if true;
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isOwnerOrAdmin(resource.data.clanId);
+    }
+
+    match /rateLimits/{uid} {
+      allow read, write: if false;
     }
   }
 }
